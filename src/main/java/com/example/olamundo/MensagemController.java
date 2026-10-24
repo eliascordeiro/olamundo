@@ -2,6 +2,10 @@ package com.example.olamundo;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,11 +29,11 @@ public class MensagemController {
 
 	@PostMapping("/api/mensagens")
 	@ResponseStatus(HttpStatus.CREATED)
-	public Mensagem criarMensagem(@RequestBody NovaMensagemRequest request) {
+	public Mensagem criarMensagem(@Valid @RequestBody NovaMensagemRequest request) {
 		return mensagemRepository.save(new Mensagem(request.texto()));
 	}
 
-	public record NovaMensagemRequest(String texto) {
+	public record NovaMensagemRequest(@NotBlank @Size(max = 2000) String texto) {
 	}
 
 }

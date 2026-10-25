@@ -17,8 +17,8 @@ os futuros modulos. Pedidos, estoque e pagamentos devem usar o nucleo relacional
 
 Uma conta participa de varias lojas, com papel por vinculo. Criar uma loja
 atribui OWNER ao criador; somente OWNER pode listar ou adicionar membros
-existentes como MANAGER ou STAFF. Estes dois papeis ainda nao tem permissoes
-comerciais, pois catalogo e vendas nao existem nesta entrega.
+existentes como MANAGER ou STAFF. As permissoes de catalogo da etapa 2
+estao descritas abaixo; papeis nunca valem globalmente para outras lojas.
 
 O backend resolve o ID imutavel do usuario pela sessao, nunca pelo corpo da
 requisicao. Listagens retornam apenas lojas com vinculo; acessar uma loja sem
@@ -39,6 +39,48 @@ convites por e-mail, transferencia de propriedade ou alteracao de papeis.
 Vinculos duplicados retornam 409 e nao alteram a permissao existente.
 Nao ha FK entre PostgreSQL e MongoDB: eventual exclusao de contas precisara
 de um fluxo explicito que trate seus vinculos.
+
+## Etapa 2 - catalogo por loja
+
+O modulo `catalog` mantem API, aplicacao, dominio e infraestrutura JDBC separados.
+Usa a autorizacao compartilhada de `stores`, sem acessar o repositorio de usuarios
+diretamente nem copiar papeis para a sessao. Todos os membros podem consultar;
+somente OWNER e MANAGER podem cadastrar produtos.
+
+| Metodo | Rota | Acesso |
+| --- | --- | --- |
+| GET | `/api/stores/{storeId}/products?page=0&size=20` | Membro; size de 1 a 100 |
+| GET | `/api/stores/{storeId}/products/{productId}` | Membro; produto deve pertencer a loja indicada |
+| POST | `/api/stores/{storeId}/products` | OWNER ou MANAGER + CSRF; retorna 201 com Location |
+
+Exemplo de cadastro (preco decimal em texto e aceito para evitar conversao
+para ponto flutuante no navegador):
+
+```json
+{
+  "name": "Camiseta",
+  "sku": "CAM-001",
+  "description": "Camiseta de algodao",
+  "price": "19.90"
+}
+```
+
+- Nome de 2 a 120 caracteres; descricao opcional de ate 2000.
+- SKU de ate 64 caracteres: letras ASCII, numeros, ponto, hifen e sublinhado,
+  comecando por letra ou numero. Espacos externos sao removidos e o SKU e
+  convertido para maiusculas. A unicidade e por loja, inclusive sob concorrencia;
+  duplicacao retorna 409. O mesmo SKU pode existir em lojas diferentes.
+- Preco entre 0 e 9999999999.99, com ate duas casas decimais, sem arredondamento.
+  Java usa BigDecimal e PostgreSQL NUMERIC(12,2); moeda fixa BRL.
+- A resposta inclui `id`, `storeId`, `name`, `sku`, `description`, `price`,
+  `currency` e `createdAt`. Listagens usam `{content, page, size, hasNext}`,
+  ordenadas por criacao e ID, sempre filtradas por loja.
+- Sem vinculo retorna 404; STAFF tentando cadastrar recebe 403. As permissoes
+  sao consultadas novamente a cada operacao.
+
+A migracao V2 adiciona apenas `catalog_products` e seus indices, sem alterar
+lojas, vinculos ou dados MongoDB. Ainda nao ha edicao/exclusao de produtos,
+estoque, imagens, vitrine publica, pedidos ou checkout.
 
 ## Executar localmente
 
@@ -85,7 +127,7 @@ Flyway aplica `src/main/resources/db/migration` na inicializacao e valida
 checksums. Nao edite uma migracao ja aplicada: crie a proxima versao.
 Nao habilite baseline automatico em banco com tabelas preexistentes.
 
-## Implantar esta etapa no Railway
+## Implantar a fundacao no Railway
 
 1. Use primeiro um ambiente de homologacao, com copias/contas de teste e sem
    apontar testes automatizados para o MongoDB de producao. Preserve a configuracao
@@ -120,6 +162,32 @@ As mudancas SQL sao aditivas e nao tocam o MongoDB. Para rollback, reimplante
 as versoes anteriores da aplicacao, preservando as tabelas novas; nao execute
 `flyway clean` nem apague volumes/bancos. Planeje separadamente qualquer
 rollback de esquema futuro.
+
+### Implantar o catalogo no Railway
+
+Com a etapa 1 validada, nao crie outro banco nem altere as credenciais existentes.
+Faca backup e publique primeiro o backend. Confirme a aplicacao da migracao
+`V2__create_catalog_products.sql`, a preservacao das lojas/vinculos e
+`GET /api/health` com status UP. As rotas antigas continuam compativeis.
+Somente depois publique o frontend com o seletor e o catalogo. Nao sao
+necessarias novas variaveis de ambiente ou mudancas no proxy `/api/`.
+
+Validacao manual, usando contas e produtos de teste autorizados:
+
+1. Entre pelo frontend, selecione a loja existente e cadastre um produto como
+   OWNER. Confira o preco de R$ 0,10 e outro de R$ 19,90, inclusive apos reload.
+2. Repita o SKU na mesma loja (409, sem apagar o formulario). Em outra loja,
+   o mesmo SKU deve ser permitido, sem compartilhar produtos.
+3. Use uma conta MANAGER para cadastrar na loja autorizada; como STAFF, a
+   mesma conta so deve visualizar. Tentar POST pelo Swagger deve retornar 403.
+4. Troque entre lojas e paginas; nao devem aparecer produtos da loja anterior.
+   Uma conta sem vinculo recebe 404 mesmo conhecendo os IDs de loja/produto.
+5. Confirme logout/login entre contas, mural e sessao existentes. O mural
+   continua global e nao deve receber informacoes privadas das lojas.
+
+Se necessario, reimplante primeiro o frontend anterior e depois o backend
+anterior, mantendo as tabelas V2 e o historico Flyway; nao execute limpeza SQL.
+Valide esta etapa antes de iniciar estoque.
 
 ### Swagger e teste manual de isolamento
 
@@ -197,10 +265,10 @@ provisionamento de infraestrutura nao estao incluidos.
 
 ## Proximas entregas pequenas
 
-1. **Esta entrega:** PostgreSQL, migracao V1, lojas, vinculos, isolamento e Swagger.
-2. **Proxima:** seletor de loja no React, hooks por loja e catalogo paginado.
-   As chaves de React Query devem incluir `storeId`, filtros e pagina.
-3. **Depois:** estoque com operacoes atomicas e testes de concorrencia.
+1. **Fundacao:** PostgreSQL, migracao V1, lojas, vinculos, isolamento e Swagger.
+2. **Entrega atual:** migracao V2, seletor de loja, catalogo paginado e cadastro
+   autorizado. Chaves de React Query incluem usuario, loja e pagina.
+3. **Proxima, apos validar a etapa 2:** estoque com operacoes atomicas e testes de concorrencia.
 4. **Depois:** pedidos com valores em BigDecimal, moeda, preco historico e idempotencia.
 5. **Depois:** gateway de pagamentos, webhooks idempotentes, reconciliacao e auditoria.
 
@@ -220,3 +288,7 @@ sessao, CSRF, CORS, expiracao, logout, mural e limite de tentativas.
 O modulo de lojas adiciona testes de isolamento entre lojas, papeis por
 vinculo, paginacao, rollback de criacao loja/OWNER, Flyway, Swagger autenticado
 e healthcheck. Os containers usam portas aleatorias, sem dados de producao.
+O catalogo cobre persistencia decimal, unicidade concorrente de SKU, isolamento,
+permissoes, validacao e paginacao. A atualizacao de um esquema V1 com lojas e
+vinculos existentes para V2 e testada separadamente, inclusive sua reaplicacao
+idempotente pelo Flyway.

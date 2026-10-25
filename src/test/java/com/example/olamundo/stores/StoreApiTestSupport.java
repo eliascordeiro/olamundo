@@ -69,11 +69,11 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 		return actor.client().send(HttpRequest.newBuilder(uri(path)).GET().build(), HttpResponse.BodyHandlers.ofString());
 	}
 
-	HttpResponse<String> post(Actor actor, String path, Map<String, String> body) throws Exception {
+	HttpResponse<String> post(Actor actor, String path, Map<String, ?> body) throws Exception {
 		return post(actor, path, body, true);
 	}
 
-	HttpResponse<String> post(Actor actor, String path, Map<String, String> body, boolean csrf) throws Exception {
+	HttpResponse<String> post(Actor actor, String path, Map<String, ?> body, boolean csrf) throws Exception {
 		var request = HttpRequest.newBuilder(uri(path)).header("Content-Type", "application/json");
 		if (csrf) {
 			request.header("X-CSRF-TOKEN", json.readTree(get(actor, "/api/auth/csrf").body()).get("token").asText());
@@ -89,6 +89,7 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 	@AfterEach
 	void cleanupStoreData() {
 		for (UUID id : createdStores) {
+			jdbc.sql("DELETE FROM catalog_products WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM store_memberships WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM stores WHERE id = :id").param("id", id).update();
 		}

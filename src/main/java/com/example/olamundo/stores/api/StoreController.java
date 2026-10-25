@@ -5,6 +5,7 @@ import java.security.Principal;
 import java.util.UUID;
 
 import com.example.olamundo.auth.AuthService;
+import com.example.olamundo.shared.PageSlice;
 import com.example.olamundo.stores.application.StoreRepository.StoreAccess;
 import com.example.olamundo.stores.application.StoreService;
 import com.example.olamundo.stores.domain.Store;
@@ -49,7 +50,7 @@ public class StoreController {
 
 	@GetMapping
 	@Operation(summary = "Listar somente as lojas do usuario atual")
-	public StoreService.Page<StoreAccess> list(Principal principal,
+	public PageSlice<StoreAccess> list(Principal principal,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 		return stores.list(userId(principal), page, size);
 	}
@@ -62,7 +63,7 @@ public class StoreController {
 
 	@GetMapping("/{storeId}/members")
 	@Operation(summary = "Listar membros; somente OWNER")
-	public StoreService.Page<StoreMembership> members(Principal principal, @PathVariable UUID storeId,
+	public PageSlice<StoreMembership> members(Principal principal, @PathVariable UUID storeId,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 		return stores.members(storeId, userId(principal), page, size);
 	}

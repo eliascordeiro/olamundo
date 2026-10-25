@@ -23,11 +23,12 @@ class StoreDocumentationTests extends StoreApiTestSupport {
 		assertThat(openApi.statusCode()).as(openApi.body()).isEqualTo(200);
 		var spec = json.readTree(openApi.body());
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/members")).isTrue();
+		assertThat(spec.get("paths").has("/api/stores/{storeId}/products/{productId}")).isTrue();
 		assertThat(spec.get("components").get("securitySchemes").get("csrf").get("name").asText())
 				.isEqualTo("X-CSRF-TOKEN");
 		assertThat(spec.get("servers").get(0).get("url").asText()).isEqualTo("/");
 		for (String path : new String[]{"/api/stores", "/api/stores/{storeId}/members",
-				"/api/auth/login", "/api/auth/register", "/api/mensagens"}) {
+				"/api/auth/login", "/api/auth/register", "/api/mensagens", "/api/stores/{storeId}/products"}) {
 			assertThat(spec.get("paths").get(path).get("post").get("security").toString()).contains("csrf");
 		}
 		assertThat(get(owner, "/api/openapi/swagger-config").body()).contains("/api/openapi");

@@ -14,6 +14,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
@@ -26,7 +27,8 @@ public class ApiExceptionHandler {
 				.body(new ApiError("E-mail ou senha incorretos."));
 	}
 
-	@ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
+	@ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
+			MethodArgumentTypeMismatchException.class})
 	ResponseEntity<ApiError> validation(Exception exception) {
 		String message = "Corpo da requisicao invalido.";
 		if (exception instanceof MethodArgumentNotValidException validation) {
@@ -48,7 +50,7 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(DataAccessException.class)
 	ResponseEntity<ApiError> database(DataAccessException exception) {
-		log.error("Authentication persistence operation failed ({})", exception.getClass().getSimpleName());
+		log.error("Persistence operation failed ({})", exception.getClass().getSimpleName());
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 				.body(new ApiError("Servico temporariamente indisponivel. Tente novamente mais tarde."));
 	}

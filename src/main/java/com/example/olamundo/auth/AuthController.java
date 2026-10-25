@@ -3,6 +3,7 @@ package com.example.olamundo.auth;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -45,6 +46,7 @@ public class AuthController {
 	}
 
 	@PostMapping("/register")
+	@SecurityRequirement(name = "csrf")
 	@ResponseStatus(HttpStatus.CREATED)
 	public void register(@Valid @RequestBody RegisterRequest body, HttpServletRequest request) {
 		rateLimiter.check(request.getRemoteAddr());
@@ -52,6 +54,7 @@ public class AuthController {
 	}
 
 	@PostMapping("/login")
+	@SecurityRequirement(name = "csrf")
 	public AuthService.UserView login(@Valid @RequestBody LoginRequest body,
 			HttpServletRequest request, HttpServletResponse response) {
 		rateLimiter.check(request.getRemoteAddr());

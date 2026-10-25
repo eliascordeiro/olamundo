@@ -7,6 +7,7 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -49,6 +50,28 @@ public class SecurityConfiguration {
 	}
 
 	@Bean
+	@Order(1)
+	SecurityFilterChain documentationFilterChain(HttpSecurity http,
+			HttpSessionSecurityContextRepository contextRepository,
+			@Value("${app.api-docs.enabled:false}") boolean enabled) throws Exception {
+		return http
+				.securityMatcher("/api/docs", "/api/docs/**", "/api/openapi", "/api/openapi/**",
+						"/api/openapi.yaml", "/api/swagger-ui/**", "/swagger-ui/**")
+				.securityContext(context -> context.securityContextRepository(contextRepository))
+				.requestCache(cache -> cache.disable())
+				.authorizeHttpRequests(auth -> {
+					if (enabled) auth.anyRequest().authenticated();
+					else auth.anyRequest().denyAll();
+				})
+				.exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) ->
+						ApiExceptionHandler.writeError(response, 401, "Entre na sua conta para continuar.")))
+				.headers(headers -> headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+						"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+						+ "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'")))
+				.build();
+	}
+
+	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http,
 			HttpSessionSecurityContextRepository contextRepository) throws Exception {
 		return http
@@ -60,7 +83,7 @@ public class SecurityConfiguration {
 				.requestCache(cache -> cache.disable())
 				.authorizeHttpRequests(auth -> auth
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-						.requestMatchers(HttpMethod.GET, "/", "/api/ola", "/api/auth/csrf").permitAll()
+						.requestMatchers(HttpMethod.GET, "/", "/api/ola", "/api/auth/csrf", "/api/health").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
 						.anyRequest().authenticated())
 				.exceptionHandling(errors -> errors

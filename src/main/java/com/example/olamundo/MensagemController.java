@@ -2,6 +2,7 @@ package com.example.olamundo;
 
 import java.util.List;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -28,6 +29,7 @@ public class MensagemController {
 	}
 
 	@PostMapping("/api/mensagens")
+	@SecurityRequirement(name = "csrf")
 	@ResponseStatus(HttpStatus.CREATED)
 	public Mensagem criarMensagem(@Valid @RequestBody NovaMensagemRequest request) {
 		return mensagemRepository.save(new Mensagem(request.texto()));

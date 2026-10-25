@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: nexo_local
+      POSTGRES_USER: ${PGUSER:-nexo_local}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Defina PGPASSWORD no ambiente ou no arquivo .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - mongo_local:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres_local:
+  mongo_local:

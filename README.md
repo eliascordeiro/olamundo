@@ -80,7 +80,58 @@ para ponto flutuante no navegador):
 
 A migracao V2 adiciona apenas `catalog_products` e seus indices, sem alterar
 lojas, vinculos ou dados MongoDB. Ainda nao ha edicao/exclusao de produtos,
-estoque, imagens, vitrine publica, pedidos ou checkout.
+imagens, vitrine publica, pedidos ou checkout.
+
+## Etapa 3 - estoque por produto e loja
+
+O modulo `inventory` separa API, aplicacao, dominio e infraestrutura JDBC.
+O catalogo valida a existencia do produto na loja; `StoreAuthorization` consulta
+o papel atual. OWNER e MANAGER registram entradas/saidas; STAFF so consulta.
+Saldo inicial zero, inclusive para produtos existentes: quantidade fisica
+deve ser registrada por uma entrada explicita, nunca presumida pela migracao.
+
+Prefixo das rotas: `/api/stores/{storeId}/products/{productId}/stock`.
+
+| Metodo | Sufixo | Contrato |
+| --- | --- | --- |
+| GET | nenhum | `{storeId, productId, quantity, version}` |
+| GET | `/movements?page=0&size=20` | Historico `{content, page, size, hasNext}`, size de 1 a 100 |
+| POST | `/movements` | OWNER/MANAGER + CSRF; operacao idempotente, retorna 200 |
+
+Exemplo de entrada (gere um novo UUID por operacao intencional):
+
+```json
+{
+  "requestId": "563422af-7713-448d-b21e-90694c984d12",
+  "type": "IN",
+  "quantity": "10",
+  "reason": "Recebimento inicial conferido"
+}
+```
+
+`type` aceita IN ou OUT. Quantidade inteira de 1 a 2147483647; saldo entre
+0 e 2147483647. Motivo obrigatorio, de 2 a 500 caracteres apos trim.
+Fracoes sao rejeitadas sem truncamento. Saida sem saldo e entrada acima do
+limite retornam 409; nada e gravado parcialmente.
+
+A resposta de movimentacao inclui `id` (requestId), `storeId`, `productId`,
+`sequence`, `type`, `quantity`, `balanceAfter`, `reason`, `userId` resolvido pela
+sessao e `createdAt` UTC. O historico e ordenado por sequencia decrescente,
+sem depender da precisao do relogio; guarda responsavel e motivo imutaveis.
+Paginacao por offset nao e um snapshot: novas movimentacoes podem deslocar paginas.
+
+- Repetir requestId + mesmos dados + mesmo usuario, no mesmo produto/loja,
+  devolve a movimentacao original sem alterar saldo, mesmo apos outras operacoes.
+  Reutilizar o identificador com dados ou responsavel diferentes retorna 409.
+  Permissao e sessao continuam sendo verificadas em reenvios.
+- Uma transacao PostgreSQL bloqueia a linha de saldo por produto, verifica
+  idempotencia, altera saldo e insere historico. Entradas iniciais concorrentes
+  tambem sao serializadas. Falha no historico desfaz a alteracao do saldo.
+- Chaves estrangeiras compostas impedem associar saldo/movimentacao a produto
+  de outra loja. Leituras e escritas sempre usam storeId + productId.
+- Nao existem edicao/exclusao de movimentacoes, ajuste direto de saldo,
+  reservas, transferencias entre lojas ou baixa automatica por venda.
+  Correcao manual exige outra entrada/saida com motivo explicito.
 
 ## Executar localmente
 
@@ -189,6 +240,32 @@ Se necessario, reimplante primeiro o frontend anterior e depois o backend
 anterior, mantendo as tabelas V2 e o historico Flyway; nao execute limpeza SQL.
 Valide esta etapa antes de iniciar estoque.
 
+### Implantar o estoque no Railway
+
+Preserve os bancos e variaveis existentes; faca backup. Publique primeiro o
+backend, confirme `V3__create_inventory.sql` e healthcheck UP. A migracao cria
+saldos/historico e adiciona uma restricao unica ao catalogo para a FK composta;
+nao altera precos, SKUs, produtos, lojas ou dados MongoDB. O indice adicional
+exige uma janela planejada se o catalogo crescer muito. Depois publique o frontend.
+Nao ha novas dependencias, variaveis ou portas.
+
+Roteiro de aceite com produto de teste autorizado:
+
+1. Abra **Estoque** no produto existente; confira saldo zero e historico vazio.
+2. Registre entrada de 10 unidades, depois saida de 3: saldo esperado 7.
+   Confira motivo, responsavel, datas e persistencia apos recarregar.
+3. Tente saida de 8: deve retornar erro sem mudar saldo/historico.
+4. No Swagger, repita exatamente o mesmo requestId e corpo de uma entrada:
+   saldo nao deve aumentar novamente. Modifique a quantidade mantendo requestId:
+   deve retornar 409. Use novo UUID somente para uma nova operacao.
+5. Confira leitura como STAFF, bloqueio de POST (403), isolamento entre lojas
+   e preservacao de login, catalogo e mural. Nao use o mural global para dados da loja.
+
+Rollback: primeiro frontend anterior e depois backend anterior, preservando V3
+e historico; nunca apague saldos ou execute `flyway clean`. Enquanto o backend
+anterior estiver em uso, nenhuma nova movimentacao deve ser registrada.
+Pedidos so iniciam depois da validacao desta etapa no Railway.
+
 ### Swagger e teste manual de isolamento
 
 Swagger agrega valor para esta etapa backend-first. Com `API_DOCS_ENABLED=true`,
@@ -266,10 +343,11 @@ provisionamento de infraestrutura nao estao incluidos.
 ## Proximas entregas pequenas
 
 1. **Fundacao:** PostgreSQL, migracao V1, lojas, vinculos, isolamento e Swagger.
-2. **Entrega atual:** migracao V2, seletor de loja, catalogo paginado e cadastro
+2. **Catalogo:** migracao V2, seletor de loja, catalogo paginado e cadastro
    autorizado. Chaves de React Query incluem usuario, loja e pagina.
-3. **Proxima, apos validar a etapa 2:** estoque com operacoes atomicas e testes de concorrencia.
-4. **Depois:** pedidos com valores em BigDecimal, moeda, preco historico e idempotencia.
+3. **Entrega atual:** migracao V3, estoque inteiro por loja, historico auditavel,
+   operacoes atomicas e idempotencia.
+4. **Proxima, apos validar a etapa 3:** pedidos com valores em BigDecimal, moeda, preco historico e idempotencia.
 5. **Depois:** gateway de pagamentos, webhooks idempotentes, reconciliacao e auditoria.
 
 Cada etapa deve ser testada e aprovada no Railway antes de iniciar a seguinte.
@@ -292,3 +370,7 @@ O catalogo cobre persistencia decimal, unicidade concorrente de SKU, isolamento,
 permissoes, validacao e paginacao. A atualizacao de um esquema V1 com lojas e
 vinculos existentes para V2 e testada separadamente, inclusive sua reaplicacao
 idempotente pelo Flyway.
+O estoque cobre entradas/saidas, limites inteiros, saldo insuficiente,
+autorizacao/CSRF, isolamento por produto/loja, reenvio idempotente, entradas
+e saidas concorrentes, rollback se o historico falhar e migracao V2 para V3
+sem inventar quantidades para produtos existentes.

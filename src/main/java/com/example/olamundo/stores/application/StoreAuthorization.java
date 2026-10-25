@@ -28,10 +28,18 @@ public class StoreAuthorization {
 	}
 
 	public void requireCatalogWriter(UUID storeId, String userId) {
+		requireWriter(storeId, userId, "Somente OWNER ou MANAGER pode cadastrar produtos.");
+	}
+
+	public void requireStockWriter(UUID storeId, String userId) {
+		requireWriter(storeId, userId, "Somente OWNER ou MANAGER pode movimentar estoque.");
+	}
+
+	private void requireWriter(UUID storeId, String userId, String message) {
 		var role = requireMember(storeId, userId);
 		if (role != StoreRole.OWNER && role != StoreRole.MANAGER) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-					"Somente OWNER ou MANAGER pode cadastrar produtos.");
+					message);
 		}
 	}
 }

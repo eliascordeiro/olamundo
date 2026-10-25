@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/stores/{storeId}/products")
-@Tag(name = "Catalogo", description = "Produtos por loja. Precos em BRL, sem estoque ou checkout nesta etapa.")
+@Tag(name = "Catalogo", description = "Produtos por loja. Precos em BRL; estoque em rotas separadas; sem checkout.")
 public class CatalogController {
 	private final CatalogService catalog;
 	private final AuthService accounts;

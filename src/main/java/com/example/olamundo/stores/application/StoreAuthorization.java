@@ -42,4 +42,8 @@ public class StoreAuthorization {
 					message);
 		}
 	}
+
+	public void requireOrderWriter(UUID storeId, String userId) {
+		requireWriter(storeId, userId, "Somente OWNER ou MANAGER pode criar ou confirmar pedidos.");
+	}
 }

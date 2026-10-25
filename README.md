@@ -80,7 +80,7 @@ para ponto flutuante no navegador):
 
 A migracao V2 adiciona apenas `catalog_products` e seus indices, sem alterar
 lojas, vinculos ou dados MongoDB. Ainda nao ha edicao/exclusao de produtos,
-imagens, vitrine publica, pedidos ou checkout.
+imagens, vitrine publica ou checkout.
 
 ## Etapa 3 - estoque por produto e loja
 
@@ -130,8 +130,70 @@ Paginacao por offset nao e um snapshot: novas movimentacoes podem deslocar pagin
 - Chaves estrangeiras compostas impedem associar saldo/movimentacao a produto
   de outra loja. Leituras e escritas sempre usam storeId + productId.
 - Nao existem edicao/exclusao de movimentacoes, ajuste direto de saldo,
-  reservas, transferencias entre lojas ou baixa automatica por venda.
+  reservas ou transferencias entre lojas. A etapa 4 baixa estoque ao confirmar
+  um pedido interno, nao ao receber pagamento.
   Correcao manual exige outra entrada/saida com motivo explicito.
+
+## Etapa 4 - pedidos internos
+
+O modulo `orders` organiza API, aplicacao, dominio e infraestrutura JDBC.
+Ele usa os servicos de catalogo e estoque, sem acessar suas tabelas diretamente.
+OWNER/MANAGER criam e confirmam; todos os membros consultam. Nao e checkout:
+sem pagamento, frete, dados de cliente, cancelamento ou devolucao automatica.
+
+| Metodo | Rota | Contrato |
+| --- | --- | --- |
+| POST | `/api/stores/{storeId}/orders` | Cria rascunho idempotente, 200, requer CSRF |
+| GET | `/api/stores/{storeId}/orders?page=0&size=20` | Resumos paginados, size de 1 a 100, mais recentes primeiro |
+| GET | `/api/stores/{storeId}/orders/{orderId}` | Resumo + itens, somente dentro da loja indicada |
+| POST | `/api/stores/{storeId}/orders/{orderId}/confirm` | Confirma e baixa estoque atomicamente, 200, requer CSRF |
+
+Exemplo de criacao (requestId UUID gerado para este pedido):
+
+```json
+{
+  "requestId": "fb26b679-8bab-479b-8718-8acb4f6f0500",
+  "items": [
+    {
+      "productId": "a9e90980-c821-43ed-9432-a78b7804b12c",
+      "quantity": "2"
+    }
+  ]
+}
+```
+
+De 1 a 50 produtos distintos da loja, quantidade inteira de 1 a 2147483647.
+Produtos repetidos/fracoes sao rejeitados, nao somados/arredondados.
+O cliente nao define precos, total, moeda ou responsavel. Estes valores sao
+resolvidos pelo backend; campos extras de preco nao substituem o catalogo.
+
+A resposta de detalhe/criacao/confirmacao e `{summary, items}`. `summary` inclui
+`id` (requestId), `storeId`, `status` DRAFT/CONFIRMED, `currency` BRL, `total`,
+`createdBy`, `createdAt`, `confirmedBy` e `confirmedAt` (nulos antes da confirmacao).
+Cada item inclui `productId`, `productName`, `sku`, `quantity`, `unitPrice` e
+`lineTotal`. Valores monetarios de pedidos sao **strings decimais com duas casas**,
+para preservar exatidao tambem no JSON/navegador; Java usa BigDecimal, PostgreSQL
+NUMERIC(12,2) para preco e NUMERIC(24,2) para subtotais/total. O limite de itens
+e quantidades cabe nessa precisao. Listagens retornam apenas resumos em
+`{content, page, size, hasNext}`.
+
+- Criar rascunho copia nome, SKU e preco atual do catalogo. Esses snapshots nao
+  mudam se o catalogo for alterado depois, inclusive na confirmacao. Rascunho
+  salvo nao e editavel e nao reserva nem baixa estoque.
+- Repetir requestId + mesmos produtos/quantidades (ordem irrelevante) + mesmo
+  criador retorna o pedido existente, mesmo ja confirmado, sem recalcular preco.
+  Dados ou criador diferentes com o mesmo ID na mesma loja retornam 409.
+- Confirmar bloqueia o pedido e processa produtos em ordem canonica de UUID,
+  na mesma transacao das saidas e historico. Falta de saldo em qualquer item
+  retorna 409 e desfaz todas as saidas; o pedido continua DRAFT para nova tentativa.
+- Confirmacoes concorrentes/repetidas devolvem o mesmo pedido CONFIRMED sem
+  nova baixa. Pedidos concorrentes respeitam o saldo disponivel. Cada saida
+  registra o confirmador e motivo `Confirmacao do pedido {orderId}`.
+- Autorizacao e consultada em cada chamada, inclusive reenvios. Outro membro
+  OWNER/MANAGER pode confirmar um rascunho da mesma loja; createdBy e confirmedBy
+  preservam os dois responsaveis. Sem vinculo ou ID de outra loja retorna 404.
+- Nao interprete CONFIRMED como pago, entregue, faturado ou nota fiscal.
+  Nao confirme pedidos reais que precisem de cancelamento antes de esse fluxo existir.
 
 ## Executar localmente
 
@@ -266,6 +328,32 @@ e historico; nunca apague saldos ou execute `flyway clean`. Enquanto o backend
 anterior estiver em uso, nenhuma nova movimentacao deve ser registrada.
 Pedidos so iniciam depois da validacao desta etapa no Railway.
 
+### Implantar os pedidos no Railway
+
+Com catalogo/estoque validados, faca backup e publique primeiro o backend.
+Confirme `V4__create_internal_orders.sql` e healthcheck UP. V4 adiciona apenas
+pedidos/itens, suas restricoes e indices, sem atualizar saldos, produtos ou
+historico existente. Depois publique o frontend. Sem novas dependencias,
+variaveis ou portas.
+
+Aceite usando somente loja/produtos de teste autorizados:
+
+1. Confira saldo e preco do produto; adicione-o ao pedido pelo catalogo.
+   Salve o rascunho, confira itens e total calculados pelo servidor.
+2. Confirme que salvar nao muda saldo. Confirme o pedido com quantidade 2
+   e confira saida de 2 no estoque e historico com o ID do pedido.
+3. Repita a confirmacao pelo Swagger: saldo/historico nao podem mudar.
+   Confira pedido e valores apos reload e nova sessao.
+4. Crie pedido com dois produtos, um sem saldo. A confirmacao deve falhar
+   sem baixa parcial; depois de entrada de teste, confirme o mesmo pedido.
+5. Confira STAFF somente consulta; POST retorna 403. Outra loja nao acessa
+   o pedido. Revalide catalogo, entradas/saidas manuais, login e mural.
+
+Rollback: frontend anterior primeiro, backend anterior depois, preservando V4,
+pedidos e historico. Nao desfaça saidas SQL manualmente nem apague dados.
+No backend anterior os pedidos nao estarao disponiveis, mas as baixas ja
+confirmadas permanecem. Nao opere vendas enquanto estiver nesse rollback.
+
 ### Swagger e teste manual de isolamento
 
 Swagger agrega valor para esta etapa backend-first. Com `API_DOCS_ENABLED=true`,
@@ -345,10 +433,12 @@ provisionamento de infraestrutura nao estao incluidos.
 1. **Fundacao:** PostgreSQL, migracao V1, lojas, vinculos, isolamento e Swagger.
 2. **Catalogo:** migracao V2, seletor de loja, catalogo paginado e cadastro
    autorizado. Chaves de React Query incluem usuario, loja e pagina.
-3. **Entrega atual:** migracao V3, estoque inteiro por loja, historico auditavel,
+3. **Estoque:** migracao V3, estoque inteiro por loja, historico auditavel,
    operacoes atomicas e idempotencia.
-4. **Proxima, apos validar a etapa 3:** pedidos com valores em BigDecimal, moeda, preco historico e idempotencia.
-5. **Depois:** gateway de pagamentos, webhooks idempotentes, reconciliacao e auditoria.
+4. **Entrega atual:** migracao V4, pedidos internos com preco historico,
+   rascunho, confirmacao atomica e idempotencia.
+5. **Depois de validar a etapa 4:** definir cancelamento/estorno de estoque e
+   ciclo financeiro antes de integrar pagamentos, webhooks e reconciliacao.
 
 Cada etapa deve ser testada e aprovada no Railway antes de iniciar a seguinte.
 Ainda nao e uma plataforma de vendas completa nem liberacao para operacao financeira.
@@ -374,3 +464,7 @@ O estoque cobre entradas/saidas, limites inteiros, saldo insuficiente,
 autorizacao/CSRF, isolamento por produto/loja, reenvio idempotente, entradas
 e saidas concorrentes, rollback se o historico falhar e migracao V2 para V3
 sem inventar quantidades para produtos existentes.
+Pedidos cobrem snapshots monetarios e totais grandes sem perda de precisao,
+criacao/confirmacao idempotentes sob concorrencia, autorizacao/CSRF, isolamento,
+validacao/paginacao, rollback de baixa parcial, disputa pelo mesmo estoque
+e migracao V3 para V4 sem alterar produtos/saldos existentes.

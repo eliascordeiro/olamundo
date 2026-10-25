@@ -89,6 +89,8 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 	@AfterEach
 	void cleanupStoreData() {
 		for (UUID id : createdStores) {
+			jdbc.sql("DELETE FROM sales_order_lines WHERE store_id = :id").param("id", id).update();
+			jdbc.sql("DELETE FROM sales_orders WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM inventory_movements WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM inventory_balances WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM catalog_products WHERE store_id = :id").param("id", id).update();

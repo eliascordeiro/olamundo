@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/stores/{storeId}/products/{productId}/stock")
-@Tag(name = "Estoque", description = "Unidades inteiras por loja; sem reservas ou baixa automatica por venda.")
+@Tag(name = "Estoque", description = "Unidades inteiras por loja; pedidos confirmados geram saidas; sem reservas.")
 public class InventoryController {
 	private final InventoryService inventory;
 	private final AuthService accounts;

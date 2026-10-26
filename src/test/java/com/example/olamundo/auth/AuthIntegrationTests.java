@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -30,14 +29,12 @@ class AuthIntegrationTests extends MongoIntegrationTest {
 	@Autowired ObjectMapper json;
 	@Autowired UserAccountRepository users;
 	@Autowired MongoSessionRepository sessions;
-	@Autowired MongoTemplate mongo;
 	@Autowired PasswordEncoder encoder;
 
 	private final String email = "test-" + UUID.randomUUID() + "@example.com";
 	private final String password = "an-exclusive-passphrase";
 	private final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
 	private final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
-	private String messageId;
 
 	@AfterEach
 	void cleanup() {
@@ -47,10 +44,6 @@ class AuthIntegrationTests extends MongoIntegrationTest {
 				sessions.deleteById(new String(Base64.getDecoder().decode(cookie.getValue()),
 						java.nio.charset.StandardCharsets.UTF_8));
 			}
-		}
-		if (messageId != null) {
-			mongo.remove(org.springframework.data.mongodb.core.query.Query.query(
-					org.springframework.data.mongodb.core.query.Criteria.where("_id").is(messageId)), "mensagens");
 		}
 	}
 
@@ -70,12 +63,9 @@ class AuthIntegrationTests extends MongoIntegrationTest {
 		assertThat(sessionCookie()).isNotEqualTo(anonymousCookie);
 		assertThat(response.headers().allValues("set-cookie").toString()).contains("HttpOnly", "SameSite=Lax");
 		assertThat(get("/api/auth/me").body()).contains(email, "Test User");
-		assertThat(get("/api/mensagens").statusCode()).isEqualTo(200);
-
-		var message = post("/api/mensagens", Map.of("texto", "integration-" + email), true);
-		assertThat(message.statusCode()).isEqualTo(201);
-		messageId = json.readTree(message.body()).get("id").asText();
-		assertThat(get("/api/mensagens").body()).contains(messageId, "integration-" + email);
+		assertThat(get("/api/mensagens").statusCode()).isEqualTo(404);
+		assertThat(post("/api/mensagens", Map.of("texto", "Retired feature"), true).statusCode()).isEqualTo(404);
+		assertThat(get("/api/stores").statusCode()).isEqualTo(200);
 		String authenticatedId = decodedSessionId();
 		assertThat(sessions.findById(authenticatedId)).isNotNull();
 		assertThat(post("/api/auth/logout", Map.of(), true).statusCode()).isEqualTo(204);

@@ -10,10 +10,17 @@ verificada em cada leitura, independentemente do monitor TTL.
 
 Monolito modular, sem microservicos. O modulo `stores` separa API, aplicacao,
 dominio e infraestrutura JDBC. PostgreSQL guarda lojas e vinculos; Flyway
-versiona o esquema. MongoDB continua responsavel por usuarios, sessoes e mural,
+versiona o esquema. MongoDB continua responsavel por usuarios e sessoes,
 sem migrar, apagar ou atribuir dados antigos a uma loja automaticamente.
 Essa convivencia e transitoria, nao uma recomendacao de dois bancos para todos
 os futuros modulos. Pedidos, estoque e pagamentos devem usar o nucleo relacional.
+
+O mural usado para testar MongoDB foi removido, incluindo GET/POST
+`/api/mensagens`, modelo e repositorio. Autenticacao e sessoes ainda dependem
+do MongoDB: mantenha o servico e as variaveis existentes no Railway.
+Esta remocao nao apaga colecoes ou dados antigos e nao exige migracao SQL.
+Retirar MongoDB requer uma migracao separada de contas/sessoes, preservando
+IDs dos usuarios referenciados nas lojas, pedidos e auditoria.
 
 Uma conta participa de varias lojas, com papel por vinculo. Criar uma loja
 atribui OWNER ao criador; somente OWNER pode listar ou adicionar membros
@@ -325,8 +332,7 @@ Validacao manual, usando contas e produtos de teste autorizados:
    mesma conta so deve visualizar. Tentar POST pelo Swagger deve retornar 403.
 4. Troque entre lojas e paginas; nao devem aparecer produtos da loja anterior.
    Uma conta sem vinculo recebe 404 mesmo conhecendo os IDs de loja/produto.
-5. Confirme logout/login entre contas, mural e sessao existentes. O mural
-   continua global e nao deve receber informacoes privadas das lojas.
+5. Confirme logout/login entre contas e sessao existentes.
 
 Se necessario, reimplante primeiro o frontend anterior e depois o backend
 anterior, mantendo as tabelas V2 e o historico Flyway; nao execute limpeza SQL.
@@ -351,7 +357,7 @@ Roteiro de aceite com produto de teste autorizado:
    saldo nao deve aumentar novamente. Modifique a quantidade mantendo requestId:
    deve retornar 409. Use novo UUID somente para uma nova operacao.
 5. Confira leitura como STAFF, bloqueio de POST (403), isolamento entre lojas
-   e preservacao de login, catalogo e mural. Nao use o mural global para dados da loja.
+   e preservacao de login e catalogo.
 
 Rollback: primeiro frontend anterior e depois backend anterior, preservando V3
 e historico; nunca apague saldos ou execute `flyway clean`. Enquanto o backend
@@ -377,7 +383,7 @@ Aceite usando somente loja/produtos de teste autorizados:
 4. Crie pedido com dois produtos, um sem saldo. A confirmacao deve falhar
    sem baixa parcial; depois de entrada de teste, confirme o mesmo pedido.
 5. Confira STAFF somente consulta; POST retorna 403. Outra loja nao acessa
-   o pedido. Revalide catalogo, entradas/saidas manuais, login e mural.
+   o pedido. Revalide catalogo, entradas/saidas manuais e login.
 
 Rollback: frontend anterior primeiro, backend anterior depois, preservando V4,
 pedidos e historico. Nao desfaça saidas SQL manualmente nem apague dados.
@@ -402,7 +408,7 @@ Aceite com produtos/pedidos de teste autorizados:
    estorno adicional. Motivo diferente e tentativa de confirmar CANCELLED
    retornam 409, sem alteracao de dados.
 4. Confira motivo vazio/espacos (400), sem CSRF (403), STAFF (403), outra loja
-   (404), e preservacao das consultas de pedidos, catalogo, login e mural.
+   (404), e preservacao das consultas de pedidos, catalogo e login.
 5. A devolucao deve ser integral. O cenario de estouro do limite e a disputa
    concorrente sao cobertos com PostgreSQL de teste; nao force limites nos
    saldos de producao para testar esse comportamento.
@@ -437,8 +443,8 @@ Nao use o dominio publico do backend com o cookie do frontend.
 5. Tente repetir o vinculo (409), enviar role OWNER (400), fazer POST sem
    token CSRF (403) e consultar sem sessao (401). Depois de novo login, obtenha
    outro token CSRF e atualize Authorize.
-6. Confirme que login, logout e mural antigos continuam funcionando.
-   O mural continua global: nao publique nele dados privados de uma loja.
+6. Confirme que login e logout continuam funcionando. O mural de teste nao
+   deve aparecer e `/api/mensagens` autenticado retorna 404.
 
 
 ## Contrato de autenticacao
@@ -453,7 +459,6 @@ Cookies devem acompanhar as requisicoes (`credentials: include`).
 | POST | `/api/auth/login` | `{email,password}`; 200 com `{id,name,email}` |
 | GET | `/api/auth/me` | Usuario atual ou 401 |
 | POST | `/api/auth/logout` | Invalida a sessao no MongoDB; 204 |
-| GET/POST | `/api/mensagens` | Mural compartilhado entre todos os usuarios autenticados |
 
 Todo POST, inclusive cadastro, login e logout, exige `X-CSRF-TOKEN` obtido
 com GET `/api/auth/csrf`. O frontend busca um token antes de cada escrita.
@@ -462,9 +467,8 @@ Sessoes expiram apos 30 minutos de inatividade. O cookie e de sessao do
 navegador, HttpOnly e SameSite=Lax. A senha deve ter no minimo 12 caracteres
 e no maximo 72 bytes UTF-8; o e-mail e normalizado para minusculas.
 
-As rotas `/` e `/api/ola` continuam publicas. O mural antigo agora exige
-autenticacao e protecao CSRF; seus dados continuam compartilhados, sem
-introduzir isolamento por organizacao que o modelo existente nao oferece.
+As rotas `/` e `/api/ola` continuam publicas. A API de mensagens de teste foi
+retirada; rotas comerciais continuam exigindo sessao e protecao CSRF em POST.
 
 ### Persistencia de sessoes
 
@@ -515,7 +519,7 @@ Ainda nao e uma plataforma de vendas completa nem liberacao para operacao financ
 Os testes inicializam MongoDB 7 e PostgreSQL 17 reais com Testcontainers: Docker funcional e
 acesso para baixar a imagem sao obrigatorios. Nenhuma conexao de producao e
 usada. Os testes cobrem cadastro, hash de senha, login, cookies, fixacao de
-sessao, CSRF, CORS, expiracao, logout, mural e limite de tentativas.
+sessao, CSRF, CORS, expiracao, logout, retirada da API de mensagens e limite de tentativas.
 O modulo de lojas adiciona testes de isolamento entre lojas, papeis por
 vinculo, paginacao, rollback de criacao loja/OWNER, Flyway, Swagger autenticado
 e healthcheck. Os containers usam portas aleatorias, sem dados de producao.

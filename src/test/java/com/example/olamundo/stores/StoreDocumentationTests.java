@@ -26,11 +26,12 @@ class StoreDocumentationTests extends StoreApiTestSupport {
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/products/{productId}")).isTrue();
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/products/{productId}/stock")).isTrue();
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/orders/{orderId}")).isTrue();
+		assertThat(spec.get("paths").has("/api/mensagens")).isFalse();
 		assertThat(spec.get("components").get("securitySchemes").get("csrf").get("name").asText())
 				.isEqualTo("X-CSRF-TOKEN");
 		assertThat(spec.get("servers").get(0).get("url").asText()).isEqualTo("/");
 		for (String path : new String[]{"/api/stores", "/api/stores/{storeId}/members",
-				"/api/auth/login", "/api/auth/register", "/api/mensagens", "/api/stores/{storeId}/products",
+				"/api/auth/login", "/api/auth/register", "/api/stores/{storeId}/products",
 				"/api/stores/{storeId}/products/{productId}/stock/movements", "/api/stores/{storeId}/orders",
 				"/api/stores/{storeId}/orders/{orderId}/confirm", "/api/stores/{storeId}/orders/{orderId}/cancel"}) {
 			assertThat(spec.get("paths").get(path).get("post").get("security").toString()).contains("csrf");

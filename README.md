@@ -138,8 +138,8 @@ Paginacao por offset nao e um snapshot: novas movimentacoes podem deslocar pagin
 
 O modulo `orders` organiza API, aplicacao, dominio e infraestrutura JDBC.
 Ele usa os servicos de catalogo e estoque, sem acessar suas tabelas diretamente.
-OWNER/MANAGER criam e confirmam; todos os membros consultam. Nao e checkout:
-sem pagamento, frete, dados de cliente, cancelamento ou devolucao automatica.
+OWNER/MANAGER criam, confirmam e cancelam; todos os membros consultam. Nao e checkout:
+sem pagamento, frete ou dados de cliente. Cancelamento integral esta na etapa 5.
 
 | Metodo | Rota | Contrato |
 | --- | --- | --- |
@@ -147,6 +147,7 @@ sem pagamento, frete, dados de cliente, cancelamento ou devolucao automatica.
 | GET | `/api/stores/{storeId}/orders?page=0&size=20` | Resumos paginados, size de 1 a 100, mais recentes primeiro |
 | GET | `/api/stores/{storeId}/orders/{orderId}` | Resumo + itens, somente dentro da loja indicada |
 | POST | `/api/stores/{storeId}/orders/{orderId}/confirm` | Confirma e baixa estoque atomicamente, 200, requer CSRF |
+| POST | `/api/stores/{storeId}/orders/{orderId}/cancel` | Cancela integralmente com motivo, 200, requer CSRF; detalhes na etapa 5 |
 
 Exemplo de criacao (requestId UUID gerado para este pedido):
 
@@ -167,9 +168,11 @@ Produtos repetidos/fracoes sao rejeitados, nao somados/arredondados.
 O cliente nao define precos, total, moeda ou responsavel. Estes valores sao
 resolvidos pelo backend; campos extras de preco nao substituem o catalogo.
 
-A resposta de detalhe/criacao/confirmacao e `{summary, items}`. `summary` inclui
-`id` (requestId), `storeId`, `status` DRAFT/CONFIRMED, `currency` BRL, `total`,
+A resposta de detalhe/criacao/confirmacao/cancelamento e `{summary, items}`. `summary` inclui
+`id` (requestId), `storeId`, `status` DRAFT/CONFIRMED/CANCELLED, `currency` BRL, `total`,
 `createdBy`, `createdAt`, `confirmedBy` e `confirmedAt` (nulos antes da confirmacao).
+Na etapa 5, inclui tambem `cancelledBy`, `cancelledAt` e `cancellationReason`,
+nulos antes do cancelamento.
 Cada item inclui `productId`, `productName`, `sku`, `quantity`, `unitPrice` e
 `lineTotal`. Valores monetarios de pedidos sao **strings decimais com duas casas**,
 para preservar exatidao tambem no JSON/navegador; Java usa BigDecimal, PostgreSQL
@@ -181,7 +184,7 @@ e quantidades cabe nessa precisao. Listagens retornam apenas resumos em
   mudam se o catalogo for alterado depois, inclusive na confirmacao. Rascunho
   salvo nao e editavel e nao reserva nem baixa estoque.
 - Repetir requestId + mesmos produtos/quantidades (ordem irrelevante) + mesmo
-  criador retorna o pedido existente, mesmo ja confirmado, sem recalcular preco.
+  criador retorna o pedido existente, mesmo ja confirmado/cancelado, sem recalcular preco.
   Dados ou criador diferentes com o mesmo ID na mesma loja retornam 409.
 - Confirmar bloqueia o pedido e processa produtos em ordem canonica de UUID,
   na mesma transacao das saidas e historico. Falta de saldo em qualquer item
@@ -193,7 +196,34 @@ e quantidades cabe nessa precisao. Listagens retornam apenas resumos em
   OWNER/MANAGER pode confirmar um rascunho da mesma loja; createdBy e confirmedBy
   preservam os dois responsaveis. Sem vinculo ou ID de outra loja retorna 404.
 - Nao interprete CONFIRMED como pago, entregue, faturado ou nota fiscal.
-  Nao confirme pedidos reais que precisem de cancelamento antes de esse fluxo existir.
+  Cancelamento nao representa reembolso financeiro.
+
+## Etapa 5 - cancelamento integral de pedidos
+
+POST `/api/stores/{storeId}/orders/{orderId}/cancel` recebe
+`{"reason":"Pedido duplicado"}`. Exige sessao, CSRF e papel OWNER/MANAGER atual
+na loja; STAFF consulta a situacao e auditoria. Sem vinculo ou pedido de outra
+loja retorna 404. O motivo e obrigatorio, tem de 2 a 500 caracteres apos remover
+espacos das extremidades, e fica preservado com ID do responsavel e instante.
+
+- DRAFT -> CANCELLED: nao movimenta estoque, mesmo que nao haja saldo.
+- CONFIRMED -> CANCELLED: devolve exatamente as quantidades baixadas, com uma
+  entrada por item e motivo `Cancelamento do pedido {orderId}` no historico.
+  Confirmador/data anteriores, criador, itens, precos e total nao sao alterados.
+- O pedido e bloqueado primeiro, depois os saldos na mesma ordem canonica da
+  confirmacao. Estorno, historico e estado sao uma unica transacao PostgreSQL.
+  Se qualquer saldo exceder 2147483647, retorna 409 e desfaz **todos** os
+  estornos; o pedido continua CONFIRMED. Resolva o saldo com uma movimentacao
+  justificada antes de repetir; nao altere saldos diretamente por SQL.
+- Repetir cancelamento com o mesmo motivo normalizado retorna 200 e a auditoria
+  original, sem nova entrada, mesmo por outro OWNER/MANAGER autorizado.
+  Motivo diferente apos cancelamento retorna 409, sem sobrescrever o original.
+  Reenvios continuam verificando sessao, CSRF e permissao.
+- Cancelamento e definitivo: nao ha reabertura, edicao do motivo ou cancelamento
+  parcial. Confirmar CANCELLED retorna 409. Disputa entre confirmar e cancelar
+  e serializada: ou cancela o rascunho, ou confirma e depois estorna.
+- Nao representa devolucao fisica de mercadoria, reembolso, nota fiscal ou
+  operacao de gateway. Estes fluxos ainda precisam de regras proprias.
 
 ## Executar localmente
 
@@ -354,6 +384,37 @@ pedidos e historico. Nao desfaça saidas SQL manualmente nem apague dados.
 No backend anterior os pedidos nao estarao disponiveis, mas as baixas ja
 confirmadas permanecem. Nao opere vendas enquanto estiver nesse rollback.
 
+### Implantar o cancelamento no Railway
+
+Com a etapa 4 validada, faca backup e publique primeiro o backend.
+Confirme `V5__cancel_internal_orders.sql`, healthcheck UP e preservacao dos
+pedidos antigos antes de publicar o frontend. V5 adiciona campos de auditoria
+e expande as restricoes para CANCELLED, sem alterar itens, precos, saldos ou
+historico existentes. Nao exige novas variaveis ou dependencias.
+
+Aceite com produtos/pedidos de teste autorizados:
+
+1. Cancele um rascunho com motivo: saldo/historico devem permanecer iguais.
+2. Confirme outro pedido com quantidade 2, depois cancele: saldo deve voltar
+   ao anterior e o historico deve registrar entrada de 2 com o ID do pedido.
+   Confira motivo, cancelador, confirmador anterior e persistencia apos reload.
+3. Repita o POST de cancelamento pelo Swagger com o mesmo motivo: nenhum
+   estorno adicional. Motivo diferente e tentativa de confirmar CANCELLED
+   retornam 409, sem alteracao de dados.
+4. Confira motivo vazio/espacos (400), sem CSRF (403), STAFF (403), outra loja
+   (404), e preservacao das consultas de pedidos, catalogo, login e mural.
+5. A devolucao deve ser integral. O cenario de estouro do limite e a disputa
+   concorrente sao cobertos com PostgreSQL de teste; nao force limites nos
+   saldos de producao para testar esse comportamento.
+
+**Rollback:** preserve V5, pedidos e movimentos. Depois de qualquer pedido
+CANCELLED existir, **nao volte ao backend da etapa 4**, cujo enum nao reconhece
+esse estado. Prefira correcao progressiva ou uma versao que mantenha suporte
+a CANCELLED. O frontend da etapa 4 tambem nao reconhece esse estado; preserve
+esse suporte na interface ou interrompa a operacao de pedidos durante a
+recuperacao. Nao apague pedidos, nao altere estados por SQL e nao reverta
+movimentacoes manualmente para contornar o rollback.
+
 ### Swagger e teste manual de isolamento
 
 Swagger agrega valor para esta etapa backend-first. Com `API_DOCS_ENABLED=true`,
@@ -435,10 +496,12 @@ provisionamento de infraestrutura nao estao incluidos.
    autorizado. Chaves de React Query incluem usuario, loja e pagina.
 3. **Estoque:** migracao V3, estoque inteiro por loja, historico auditavel,
    operacoes atomicas e idempotencia.
-4. **Entrega atual:** migracao V4, pedidos internos com preco historico,
+4. **Pedidos:** migracao V4, pedidos internos com preco historico,
    rascunho, confirmacao atomica e idempotencia.
-5. **Depois de validar a etapa 4:** definir cancelamento/estorno de estoque e
-   ciclo financeiro antes de integrar pagamentos, webhooks e reconciliacao.
+5. **Entrega atual:** migracao V5, cancelamento integral auditado e estorno
+   atomico/idempotente de estoque.
+6. **Depois de validar a etapa 5:** definir ciclo financeiro, regras de
+   pagamento/reembolso e reservas antes de gateway, webhooks e reconciliacao.
 
 Cada etapa deve ser testada e aprovada no Railway antes de iniciar a seguinte.
 Ainda nao e uma plataforma de vendas completa nem liberacao para operacao financeira.
@@ -468,3 +531,7 @@ Pedidos cobrem snapshots monetarios e totais grandes sem perda de precisao,
 criacao/confirmacao idempotentes sob concorrencia, autorizacao/CSRF, isolamento,
 validacao/paginacao, rollback de baixa parcial, disputa pelo mesmo estoque
 e migracao V3 para V4 sem alterar produtos/saldos existentes.
+Cancelamento cobre rascunho sem estoque, estorno integral do confirmado,
+auditoria, motivo e reenvios, autorizacao/CSRF, isolamento, rollback por estouro
+de saldo, cancelamentos concorrentes, disputa confirmacao/cancelamento e
+migracao V4 para V5 com snapshots/saldos/auditoria preservados.

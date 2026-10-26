@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/stores/{storeId}/orders")
-@Tag(name = "Pedidos", description = "Pedidos internos em BRL, sem pagamento, frete, cliente ou cancelamento.")
+@Tag(name = "Pedidos", description = "Pedidos internos em BRL com cancelamento integral; sem pagamento, frete ou cliente.")
 public class OrderController {
 	private final OrderService orders;
 	private final AuthService accounts;
@@ -63,6 +63,17 @@ public class OrderController {
 	@Operation(summary = "Confirmar e baixar estoque atomicamente; OWNER/MANAGER; repetir nao baixa novamente; retorna 200")
 	public Order confirm(Principal principal, @PathVariable UUID storeId, @PathVariable UUID orderId) {
 		return orders.confirm(storeId, orderId, accounts.currentUser(principal.getName()).id());
+	}
+
+	@PostMapping("/{orderId}/cancel")
+	@SecurityRequirement(name = "csrf")
+	@Operation(summary = "Cancelar integralmente; OWNER/MANAGER; confirmado devolve estoque atomicamente; mesmo motivo retorna 200 sem novo estorno")
+	public Order cancel(Principal principal, @PathVariable UUID storeId, @PathVariable UUID orderId,
+			@Valid @RequestBody Cancellation request) {
+		return orders.cancel(storeId, orderId, accounts.currentUser(principal.getName()).id(), request.reason());
+	}
+
+	public record Cancellation(@NotNull @Size(min = 2, max = 500) String reason) {
 	}
 
 	public record NewOrder(@NotNull UUID requestId,

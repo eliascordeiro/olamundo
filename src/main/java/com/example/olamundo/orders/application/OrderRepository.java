@@ -14,4 +14,5 @@ public interface OrderRepository {
 	Optional<Order> find(UUID storeId, UUID id, boolean lock);
 	List<Order.Summary> list(UUID storeId, int limit, long offset);
 	void confirm(UUID storeId, UUID id, String userId, Instant confirmedAt);
+	void cancel(UUID storeId, UUID id, String userId, Instant cancelledAt, String reason);
 }

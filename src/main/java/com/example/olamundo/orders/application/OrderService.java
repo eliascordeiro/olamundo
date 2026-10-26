@@ -87,12 +87,40 @@ public class OrderService {
 		authorization.requireOrderWriter(storeId, userId);
 		var order = find(storeId, id, true);
 		if (order.summary().status() == Order.Status.CONFIRMED) return order;
+		if (order.summary().status() == Order.Status.CANCELLED) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "Pedido cancelado nao pode ser confirmado.");
+		}
 		// Lock order first, then stock rows in canonical product order across every order.
 		for (var line : order.items()) {
 			inventory.move(storeId, line.productId(), userId, UUID.randomUUID(), MovementType.OUT,
 					BigDecimal.valueOf(line.quantity()), "Confirmacao do pedido " + id);
 		}
 		orders.confirm(storeId, id, userId, now());
+		return find(storeId, id, false);
+	}
+
+	@Transactional
+	public Order cancel(UUID storeId, UUID id, String userId, String reason) {
+		authorization.requireOrderWriter(storeId, userId);
+		String normalizedReason = reason == null ? "" : reason.strip();
+		if (normalizedReason.length() < 2 || normalizedReason.length() > 500) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe motivo de cancelamento de 2 a 500 caracteres.");
+		}
+		var order = find(storeId, id, true);
+		if (order.summary().status() == Order.Status.CANCELLED) {
+			if (!order.summary().cancellationReason().equals(normalizedReason)) {
+				throw new ResponseStatusException(HttpStatus.CONFLICT, "Pedido ja cancelado com outro motivo. Consulte o pedido.");
+			}
+			return order;
+		}
+		if (order.summary().status() == Order.Status.CONFIRMED) {
+			// Match confirmation's lock order; any failed return rolls back the entire cancellation.
+			for (var line : order.items()) {
+				inventory.move(storeId, line.productId(), userId, UUID.randomUUID(), MovementType.IN,
+						BigDecimal.valueOf(line.quantity()), "Cancelamento do pedido " + id);
+			}
+		}
+		orders.cancel(storeId, id, userId, now(), normalizedReason);
 		return find(storeId, id, false);
 	}
 

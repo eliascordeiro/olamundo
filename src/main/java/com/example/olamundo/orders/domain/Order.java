@@ -8,11 +8,12 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 public record Order(Summary summary, List<Line> items) {
-	public enum Status { DRAFT, CONFIRMED }
+	public enum Status { DRAFT, CONFIRMED, CANCELLED }
 
 	public record Summary(UUID id, UUID storeId, Status status, String currency,
 			@JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal total,
-			String createdBy, Instant createdAt, String confirmedBy, Instant confirmedAt) {
+			String createdBy, Instant createdAt, String confirmedBy, Instant confirmedAt,
+			String cancelledBy, Instant cancelledAt, String cancellationReason) {
 	}
 
 	public record Line(UUID productId, String productName, String sku, int quantity,

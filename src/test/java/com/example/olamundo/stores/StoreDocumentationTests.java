@@ -32,7 +32,7 @@ class StoreDocumentationTests extends StoreApiTestSupport {
 		for (String path : new String[]{"/api/stores", "/api/stores/{storeId}/members",
 				"/api/auth/login", "/api/auth/register", "/api/mensagens", "/api/stores/{storeId}/products",
 				"/api/stores/{storeId}/products/{productId}/stock/movements", "/api/stores/{storeId}/orders",
-				"/api/stores/{storeId}/orders/{orderId}/confirm"}) {
+				"/api/stores/{storeId}/orders/{orderId}/confirm", "/api/stores/{storeId}/orders/{orderId}/cancel"}) {
 			assertThat(spec.get("paths").get(path).get("post").get("security").toString()).contains("csrf");
 		}
 		assertThat(get(owner, "/api/openapi/swagger-config").body()).contains("/api/openapi");

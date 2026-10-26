@@ -80,15 +80,27 @@ public class JdbcOrderRepository implements OrderRepository {
 				.param("store", storeId).param("id", id).update());
 	}
 
+	@Override
+	public void cancel(UUID storeId, UUID id, String userId, Instant cancelledAt, String reason) {
+		requireOne(jdbc.sql("""
+				UPDATE sales_orders SET status = 'CANCELLED', cancelled_by = :user,
+				cancelled_at = :cancelled, cancellation_reason = :reason
+				WHERE store_id = :store AND id = :id AND status IN ('DRAFT', 'CONFIRMED')
+				""").param("user", userId).param("cancelled", Timestamp.from(cancelledAt)).param("reason", reason)
+				.param("store", storeId).param("id", id).update());
+	}
+
 	private static void requireOne(int updated) {
 		if (updated != 1) throw new IllegalStateException("Pedido esperado nao encontrado ao persistir alteracao.");
 	}
 
 	private static Order.Summary summary(ResultSet row) throws SQLException {
 		var confirmed = row.getTimestamp("confirmed_at");
+		var cancelled = row.getTimestamp("cancelled_at");
 		return new Order.Summary(row.getObject("id", UUID.class), row.getObject("store_id", UUID.class),
 				Order.Status.valueOf(row.getString("status")), row.getString("currency"), row.getBigDecimal("total"),
 				row.getString("created_by"), row.getTimestamp("created_at").toInstant(), row.getString("confirmed_by"),
-				confirmed == null ? null : confirmed.toInstant());
+				confirmed == null ? null : confirmed.toInstant(), row.getString("cancelled_by"),
+				cancelled == null ? null : cancelled.toInstant(), row.getString("cancellation_reason"));
 	}
 }

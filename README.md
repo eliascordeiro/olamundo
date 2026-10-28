@@ -47,6 +47,63 @@ Vinculos duplicados retornam 409 e nao alteram a permissao existente.
 Nao ha FK entre PostgreSQL e MongoDB: eventual exclusao de contas precisara
 de um fluxo explicito que trate seus vinculos.
 
+## Equipe e vendedores - primeira entrega comercial
+
+O modulo `salespeople` adiciona o cadastro comercial por loja, separado da conta
+de login e do papel de membro. Somente OWNER pode consultar e administrar.
+MANAGER e STAFF recebem 403; nao membros recebem 404. Os perfis existentes
+nao foram ampliados. Nenhuma senha, usuario ou dado legado foi importado.
+
+Prefixo: `/api/stores/{storeId}/salespeople`.
+
+| Metodo | Sufixo | Contrato |
+| --- | --- | --- |
+| GET | `?page=0&size=20` | Lista ativos e inativos; size 1..100, ordenacao por criacao/ID |
+| GET | `/{id}` | Consulta cadastro da loja, inclusive inativo |
+| POST | nenhum | `{"requestId":"UUID","name":"Nome do vendedor"}`; retorna 200 |
+| POST | `/{id}` | `{"name":"Nome corrigido","active":false,"version":0}` |
+| POST | `/{id}/account` | `{"email":"membro@example.com","version":0}`; email vazio ou null desvincula |
+
+Todos os POST exigem sessao e CSRF. Nome e normalizado com strip e deve ter
+2..120 caracteres. Novos vendedores ficam ativos e sem conta vinculada.
+O requestId torna-se o ID comercial; repeti-lo com o mesmo nome original e
+ator devolve o cadastro atual sem duplicar, mesmo apos edicoes. Reutiliza-lo
+com outro nome/ator retorna 409.
+
+O vinculo por e-mail exige conta existente e membership na mesma loja.
+Nao cria conta nem membership e nao muda permissoes. Cada conta pode estar
+vinculada a um vendedor por loja, inclusive inativo; em outra loja o vinculo
+e independente. Email de conta inexistente ou nao membro retorna 404 com a
+mesma mensagem; duplicacao retorna 409.
+
+Edicoes e vinculos recebem a versao lida; cada alteracao incrementa a versao.
+Escrita concorrente/desatualizada retorna 409 sem sobrescrever dados. Se uma
+resposta de edicao/vinculo se perder, consulte o cadastro novamente antes
+de outra alteracao; nao ha repeticao automatica desses POST.
+
+Respostas incluem `id`, `storeId`, `name`, `active`, `userId` opcional,
+`version`, `createdBy`, `createdAt`, `updatedBy`, `updatedAt`. A autoria e
+resolvida pela sessao. Esses campos registram criacao/ultima alteracao,
+nao um historico imutavel de todas as edicoes.
+
+A V6 cria somente `salespeople`, com FK para loja, FK opcional para membership
+da mesma loja e unicidade do vinculo por loja. Nao altera dados existentes.
+Nao ha exclusao fisica, concessao/revogacao de acesso, convite, calculo de
+comissao nem atribuicao de vendedor aos pedidos internos nesta entrega.
+Inativar o cadastro comercial **nao bloqueia login nem revoga permissoes**.
+Permissoes detalhadas e migracao de usuarios ativos sao etapas futuras.
+
+### Validacao no Railway apos publicar front e back
+
+Sem novas variaveis de ambiente; mantenha PostgreSQL, MongoDB e o Flyway.
+Confirme a aplicacao da V6 nos logs e `/api/health` com status UP.
+Entre como proprietario, selecione a loja e abra **Equipe e vendedores**.
+Cadastre, edite, vincule uma conta ja membro e inative o vendedor.
+Confira que a conta mantem o mesmo acesso. Outra loja nao deve exibir esse
+vendedor; MANAGER/STAFF nao devem conseguir administrar nem pela API.
+O Swagger autenticado documenta as novas rotas quando habilitado.
+Isso e um roteiro de aceite, nao uma certificacao de deploy ja executado.
+
 ## Etapa 2 - catalogo por loja
 
 O modulo `catalog` mantem API, aplicacao, dominio e infraestrutura JDBC separados.

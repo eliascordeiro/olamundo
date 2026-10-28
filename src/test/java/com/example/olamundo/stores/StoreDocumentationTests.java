@@ -26,6 +26,9 @@ class StoreDocumentationTests extends StoreApiTestSupport {
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/products/{productId}")).isTrue();
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/products/{productId}/stock")).isTrue();
 		assertThat(spec.get("paths").has("/api/stores/{storeId}/orders/{orderId}")).isTrue();
+		assertThat(spec.get("paths").has("/api/stores/{storeId}/salespeople")).isTrue();
+		assertThat(spec.get("paths").has("/api/stores/{storeId}/salespeople/{id}")).isTrue();
+		assertThat(spec.get("paths").has("/api/stores/{storeId}/salespeople/{id}/account")).isTrue();
 		assertThat(spec.get("paths").has("/api/mensagens")).isFalse();
 		assertThat(spec.get("components").get("securitySchemes").get("csrf").get("name").asText())
 				.isEqualTo("X-CSRF-TOKEN");
@@ -33,7 +36,9 @@ class StoreDocumentationTests extends StoreApiTestSupport {
 		for (String path : new String[]{"/api/stores", "/api/stores/{storeId}/members",
 				"/api/auth/login", "/api/auth/register", "/api/stores/{storeId}/products",
 				"/api/stores/{storeId}/products/{productId}/stock/movements", "/api/stores/{storeId}/orders",
-				"/api/stores/{storeId}/orders/{orderId}/confirm", "/api/stores/{storeId}/orders/{orderId}/cancel"}) {
+				"/api/stores/{storeId}/orders/{orderId}/confirm", "/api/stores/{storeId}/orders/{orderId}/cancel",
+				"/api/stores/{storeId}/salespeople", "/api/stores/{storeId}/salespeople/{id}",
+				"/api/stores/{storeId}/salespeople/{id}/account"}) {
 			assertThat(spec.get("paths").get(path).get("post").get("security").toString()).contains("csrf");
 		}
 		assertThat(get(owner, "/api/openapi/swagger-config").body()).contains("/api/openapi");

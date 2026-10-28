@@ -1,5 +1,7 @@
 package com.example.olamundo;
 
+import java.time.Duration;
+
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.mongodb.MongoDBContainer;
@@ -7,7 +9,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 public abstract class MongoIntegrationTest {
 	private static final MongoDBContainer MONGO = new MongoDBContainer("mongo:7.0");
-	private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+	private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
+			.withStartupTimeout(Duration.ofMinutes(3));
 
 	static {
 		MONGO.start();

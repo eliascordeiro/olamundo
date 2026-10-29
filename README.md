@@ -104,6 +104,37 @@ vendedor; MANAGER/STAFF nao devem conseguir administrar nem pela API.
 O Swagger autenticado documenta as novas rotas quando habilitado.
 Isso e um roteiro de aceite, nao uma certificacao de deploy ja executado.
 
+## Administracao da plataforma - proprietarios (Super)
+
+Console separado da operacao das lojas. O **Super** e uma conta comum cujo e-mail
+consta em `SUPER_ADMIN_EMAILS` (lista separada por virgulas; vazia por padrao, ou
+seja, ninguem e Super). `GET /api/auth/me` devolve `platformAdmin`. O Super **nao
+herda acesso as lojas**: so administra proprietarios em `/api/platform`.
+
+| Metodo | Rota | Acesso |
+| --- | --- | --- |
+| GET | `/api/platform/owners?page=0&size=20` | Super |
+| POST | `/api/platform/owners` | Super + CSRF; `{"requestId":"UUID","name":"...","email":"opcional"}` |
+| POST | `/api/platform/owners/{id}/invite` | Super + CSRF; `{"email":"dono@example.com"}` |
+| POST | `/api/platform/invites/accept` | Publico + CSRF + limite de tentativas; `{"token","name","password"}` |
+
+- Nao Super recebe 403; anonimo, 401. O `requestId` torna a criacao reenviavel
+  sem duplicar (mesmos dados) e retorna 409 se reutilizado com outros dados.
+- Estados: `PENDING` (sem e-mail), `INVITED` (convite emitido), `ACTIVE` (conta
+  vinculada). Se o e-mail ja tiver conta, o proprietario e ativado na hora, sem convite.
+- O convite e um token de uso unico, valido por 7 dias, devolvido **uma unica vez**
+  ao Super (o banco guarda apenas o hash SHA-256). Nao ha envio de e-mail nesta
+  entrega: o Super entrega o link ao proprietario. Novo convite invalida os anteriores.
+  O proprietario define a propria senha (BCrypt); nenhuma senha e criada pelo Super.
+- Um e-mail/conta so pode pertencer a um proprietario (409 em duplicidade).
+- A V7 cria `platform_owners` e `platform_owner_invites` e semeia **Móveis Murimel**
+  como `PENDING`, sem e-mail, conta, lojas ou dados. Nao ha importacao do legado;
+  associar lojas ao proprietario e a carga do Murimel sao etapas futuras. Hoje o
+  proprietario ativo cria suas lojas pela API/telas existentes (vira OWNER delas).
+
+No Railway defina `SUPER_ADMIN_EMAILS` com o e-mail da conta Super (cadastre-a
+antes pela tela normal) e publique o backend antes do frontend.
+
 ## Etapa 2 - catalogo por loja
 
 O modulo `catalog` mantem API, aplicacao, dominio e infraestrutura JDBC separados.

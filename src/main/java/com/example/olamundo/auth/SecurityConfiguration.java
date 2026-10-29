@@ -84,7 +84,8 @@ public class SecurityConfiguration {
 				.authorizeHttpRequests(auth -> auth
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.requestMatchers(HttpMethod.GET, "/", "/api/ola", "/api/auth/csrf", "/api/health").permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register",
+								"/api/platform/invites/accept").permitAll()
 						.anyRequest().authenticated())
 				.exceptionHandling(errors -> errors
 						.authenticationEntryPoint((request, response, exception) ->

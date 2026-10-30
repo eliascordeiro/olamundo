@@ -11,6 +11,7 @@ public interface SalespersonRepository {
 	boolean create(UUID storeId, UUID id, String name, String actorId, Instant now);
 	boolean matchesRegistration(UUID storeId, UUID id, String name, String actorId);
 	Optional<Salesperson> find(UUID storeId, UUID id);
+	Optional<Salesperson> findByUser(UUID storeId, String userId);
 	List<Salesperson> list(UUID storeId, int limit, long offset);
 	Optional<Salesperson> update(UUID storeId, UUID id, String name, boolean active,
 			long version, String actorId, Instant now);

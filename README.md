@@ -93,6 +93,27 @@ comissao nem atribuicao de vendedor aos pedidos internos nesta entrega.
 Inativar o cadastro comercial **nao bloqueia login nem revoga permissoes**.
 Permissoes detalhadas e migracao de usuarios ativos sao etapas futuras.
 
+### Acesso do vendedor as lojas do proprietario
+
+`POST /api/stores/{storeId}/salespeople/{id}/access` (OWNER + CSRF):
+`{"email":"...","version":0,"stores":[{"storeId":"UUID","role":"STAFF"}]}`.
+Escolhe, por loja, o perfil `STAFF` ou `MANAGER`; a loja do cadastro deve estar
+na lista e o ator deve ser OWNER de todas (404 caso contrario; nada e gravado).
+
+- **E-mail com conta:** inclui o vinculo nas lojas escolhidas, cria (ou reaproveita)
+  um cadastro de vendedor ligado a conta em cada loja e liga o cadastro atual.
+  Quem ja e membro **mantem o perfil atual** (sem promover nem rebaixar).
+  Versao desatualizada ou conta ja ligada a outro vendedor da loja retorna 409
+  e desfaz tudo.
+- **E-mail sem conta:** nada e criado; devolve `inviteToken` (uma unica vez, 7 dias,
+  uso unico; so o hash fica no banco, tabelas `seller_invites*`, V8). Novo convite
+  do mesmo proprietario para o mesmo e-mail invalida o anterior. Nao ha envio de e-mail.
+- `POST /api/seller-invites/accept` (publico + CSRF + limite de tentativas):
+  `{"token","name","password"}` cria a conta (senha definida pelo proprio vendedor)
+  ou usa a existente e aplica as concessoes, apenas nas lojas que quem convidou
+  ainda administra (410 se nenhuma). Respostas de vendedor incluem `accountEmail`.
+- `/account` continua existindo para ligar/desligar apenas o cadastro comercial.
+
 ### Validacao no Railway apos publicar front e back
 
 Sem novas variaveis de ambiente; mantenha PostgreSQL, MongoDB e o Flyway.

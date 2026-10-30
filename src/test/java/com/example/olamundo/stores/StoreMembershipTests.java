@@ -49,7 +49,19 @@ class StoreMembershipTests extends StoreApiTestSupport {
 	@Test
 	void storeAndOwnerAreCommittedAtomicallyAndMigrationsAreApplied() {
 		String name = "rollback-" + UUID.randomUUID();
-		assertThatThrownBy(() -> stores.create("x".repeat(256), name)).isInstanceOf(DataIntegrityViolationException.class);
+		UUID ownerRow = UUID.randomUUID();
+		jdbc.sql("""
+				INSERT INTO platform_owners (id, name, email, status, user_id, created_by, created_at, updated_at)
+				VALUES (:id, 'Rollback', 'rollback@example.com', 'ACTIVE', 'rollback-user', 'test', now(), now())
+				""").param("id", ownerRow).update();
+		// Faz somente a insercao do vinculo OWNER falhar, depois de a loja ja ter sido inserida.
+		jdbc.sql("ALTER TABLE store_memberships ADD CONSTRAINT test_reject_rollback_user CHECK (user_id <> 'rollback-user')").update();
+		try {
+			assertThatThrownBy(() -> stores.create("rollback-user", name)).isInstanceOf(DataIntegrityViolationException.class);
+		} finally {
+			jdbc.sql("ALTER TABLE store_memberships DROP CONSTRAINT test_reject_rollback_user").update();
+			jdbc.sql("DELETE FROM platform_owners WHERE id = :id").param("id", ownerRow).update();
+		}
 		assertThat(jdbc.sql("SELECT count(*) FROM stores WHERE name = :name").param("name", name)
 				.query(Long.class).single()).isZero();
 		assertThat(jdbc.sql("SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success")

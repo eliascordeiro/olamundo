@@ -47,6 +47,12 @@ public class JdbcSalespersonRepository implements SalespersonRepository {
 	}
 
 	@Override
+	public Optional<Salesperson> findByUser(UUID storeId, String userId) {
+		return jdbc.sql("SELECT * FROM salespeople WHERE store_id = :store AND user_id = :user")
+				.param("store", storeId).param("user", userId).query(this::map).optional();
+	}
+
+	@Override
 	public List<Salesperson> list(UUID storeId, int limit, long offset) {
 		return jdbc.sql("""
 				SELECT * FROM salespeople WHERE store_id = :store

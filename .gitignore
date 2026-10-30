@@ -1,4 +1,7 @@
 HELP.md
+# Saidas do importador do legado (contem dados do cliente); nunca versionar.
+legacy-import-out/
+__pycache__/
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar

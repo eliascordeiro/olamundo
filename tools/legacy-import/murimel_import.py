@@ -81,6 +81,7 @@ def build_plan(text, discarded_stores=DISCARDED_STORES):
         drop("LOJA_DESCARTADA", "loja", code, code, "decisao do cliente: loja sem cadastro no legado")
 
     # produtos validos
+    raw_codes = {row["codigo"] for row in t["easy_produtos"]}
     products = {}
     for row in t["easy_produtos"]:
         code = row["codigo"]
@@ -114,7 +115,12 @@ def build_plan(text, discarded_stores=DISCARDED_STORES):
         elif store not in stores:
             drop("SALDO_LOJA_SEM_CADASTRO", "saldo", code, store, f"saldo {saldo}")
         elif code not in products:
-            drop("SALDO_PRODUTO_INEXISTENTE", "saldo", code, store, f"saldo {saldo}; produto ausente do catalogo ou nao importavel")
+            if code in raw_codes:
+                drop("SALDO_PRODUTO_NAO_IMPORTADO", "saldo", code, store,
+                     f"saldo {saldo}; o produto existe no legado mas foi rejeitado (sem nome, SKU ou preco invalidos)")
+            else:
+                drop("SALDO_PRODUTO_INEXISTENTE", "saldo", code, store,
+                     f"saldo {saldo}; o codigo nao existe mais no catalogo do legado")
         elif saldo < 0:
             drop("SALDO_NEGATIVO", "saldo", code, store, f"saldo {saldo}")
         elif saldo != saldo.to_integral_value() or saldo > base.INT_MAX:

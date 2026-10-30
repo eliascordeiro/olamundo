@@ -160,6 +160,28 @@ herda acesso as lojas**: so administra proprietarios em `/api/platform`.
 No Railway defina `SUPER_ADMIN_EMAILS` com o e-mail da conta Super (cadastre-a
 antes pela tela normal) e publique o backend antes do frontend.
 
+## Clientes (da empresa)
+
+Clientes pertencem a **empresa** (o proprietario ativo da plataforma) e valem para todas as
+lojas dela. A V10 adiciona `stores.owner_id`: lojas existentes herdam a empresa do proprietario
+ativo que e OWNER delas, e toda loja nova criada por um proprietario ativo ja nasce com ela.
+Loja sem empresa responde 409 nas rotas de clientes. **Qualquer membro da loja (OWNER, MANAGER ou
+STAFF) consulta, cadastra e edita**; nao membros recebem 404; clientes de outra empresa nunca aparecem.
+
+| Metodo | Rota | Contrato |
+| --- | --- | --- |
+| GET | `/api/stores/{storeId}/customers?q=&page=0&size=20` | Busca por nome (contem), CPF/CNPJ (prefixo) ou telefone (digitos); ordenacao por nome |
+| GET | `/api/stores/{storeId}/customers/{id}` | Consulta |
+| POST | `/api/stores/{storeId}/customers` | `{"requestId":"UUID","name":"...", ...campos}`; reenvio seguro; retorna 200 |
+| POST | `/api/stores/{storeId}/customers/{id}` | `{"version":0,"name":"...", ...campos}`; substitui todos os campos editaveis |
+
+Campos: `name` (2..120, obrigatorio), `document` (CPF/CNPJ **valido** pelos digitos verificadores; aceita
+mascara e e guardado so com digitos), `rg`, `stateRegistration`, `birthDate`, `phone`, `mobile`, `email`,
+`zip` (8 digitos), `street`, `number`, `complement`, `neighborhood`, `city`, `state` (UF), `ibge`.
+Um CPF/CNPJ por empresa (409 em duplicidade; clientes sem documento podem coexistir). Edicao concorrente
+retorna 409. `customer_legacy_codes` guarda os codigos do sistema antigo (varios podem apontar para um cliente).
+Nao ha exclusao. Dados de credito (salario, filiacao, conjuge, empresa, referencias) nao existem no modelo (LGPD).
+
 ## Etapa 2 - catalogo por loja
 
 O modulo `catalog` mantem API, aplicacao, dominio e infraestrutura JDBC separados.

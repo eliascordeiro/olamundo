@@ -34,6 +34,16 @@ proprietario; vendedores entram **sem conta** (o proprietario informa o e-mail e
 o convite); clientes, vendas, pagamentos, recibos, montagens, grupos e custos ficam
 fora. Ids sao deterministicos (uuid5) e a V9 grava `legacy_code` em lojas e vendedores.
 
+### 3) Clientes (`murimel_customers.py`)
+Gera `carga_clientes.sql` (+ `clientes_descartados.csv`, `clientes_unidos.csv`, `relatorio_clientes.md`) para a
+empresa "Móveis Murimel". **Depende da V10** (tabelas `customers` e `customer_legacy_codes`) e do proprietario
+da empresa existir (semeado pela V7). Decisoes: todos os clientes; so dados minimos (sem salario, filiacao,
+conjuge, empresa onde trabalha nem referencias); CPF/CNPJ valido repetido e unido automaticamente (campos vazios
+do principal sao completados pelos demais e **todos os codigos antigos ficam rastreados**); documento
+invalido/placeholder nunca une ninguem e entra vazio; campos invalidos (e-mail, telefone, CEP, UF, datas
+`0001-01-01`) viram vazios, nunca inventados; acentuacao dupla codificada e corrigida. Os arquivos de
+apoio contem so codigos, sem dados pessoais. Aplicar: `psql ... -f carga_clientes.sql` (idempotente, ~30 s).
+
 ### Como aplicar (teste local descartavel)
 ```bash
 docker run -d --name murimel-pg-test -e POSTGRES_PASSWORD=test -p 127.0.0.1:55433:5432 postgres:17-alpine

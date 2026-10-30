@@ -52,6 +52,12 @@ public class JdbcPlatformOwnerRepository implements PlatformOwnerRepository {
 	}
 
 	@Override
+	public Optional<UUID> findActiveIdByUserId(String userId) {
+		return jdbc.sql("SELECT id FROM platform_owners WHERE user_id = :user AND status = 'ACTIVE'")
+				.param("user", userId).query((row, index) -> row.getObject("id", UUID.class)).optional();
+	}
+
+	@Override
 	public List<PlatformOwner> list(int limit, long offset) {
 		return jdbc.sql("SELECT * FROM platform_owners ORDER BY created_at, id LIMIT :limit OFFSET :offset")
 				.param("limit", limit).param("offset", offset).query(this::map).list();

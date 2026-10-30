@@ -116,6 +116,8 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 			jdbc.sql("DELETE FROM stores WHERE id = :id").param("id", id).update();
 		}
 		for (UUID id : createdOwners) {
+			jdbc.sql("DELETE FROM customer_legacy_codes WHERE owner_id = :id").param("id", id).update();
+			jdbc.sql("DELETE FROM customers WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM platform_owner_invites WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM platform_owners WHERE id = :id").param("id", id).update();
 		}

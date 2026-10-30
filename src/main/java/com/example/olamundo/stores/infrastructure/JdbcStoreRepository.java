@@ -30,6 +30,17 @@ public class JdbcStoreRepository implements StoreRepository {
 	}
 
 	@Override
+	public void assignOwner(UUID storeId, UUID ownerId) {
+		jdbc.sql("UPDATE stores SET owner_id = :owner WHERE id = :id").param("owner", ownerId).param("id", storeId).update();
+	}
+
+	@Override
+	public Optional<UUID> findOwnerId(UUID storeId) {
+		return jdbc.sql("SELECT owner_id FROM stores WHERE id = :id AND owner_id IS NOT NULL").param("id", storeId)
+				.query((row, index) -> row.getObject("owner_id", UUID.class)).optional();
+	}
+
+	@Override
 	public boolean addMember(StoreMembership member) {
 		return jdbc.sql("""
 				INSERT INTO store_memberships (store_id, user_id, role, created_at)

@@ -16,6 +16,8 @@ public interface PlatformOwnerRepository {
 
 	boolean existsActiveByUserId(String userId);
 
+	Optional<UUID> findActiveIdByUserId(String userId);
+
 	List<PlatformOwner> list(int limit, long offset);
 
 	/** Define o e-mail e deixa o proprietario aguardando convite; vazio se ja estiver ativo. */

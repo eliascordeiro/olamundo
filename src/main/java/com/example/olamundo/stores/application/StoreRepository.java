@@ -10,6 +10,8 @@ import com.example.olamundo.stores.domain.StoreRole;
 
 public interface StoreRepository {
 	void create(Store store);
+	void assignOwner(UUID storeId, UUID ownerId);
+	Optional<UUID> findOwnerId(UUID storeId);
 	boolean addMember(StoreMembership membership);
 	Optional<StoreRole> findRole(UUID storeId, String userId);
 	Optional<Store> findStore(UUID storeId);

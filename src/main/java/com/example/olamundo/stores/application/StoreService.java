@@ -31,13 +31,14 @@ public class StoreService {
 
 	@Transactional
 	public Store create(String userId, String name) {
-		ownerAccess.requireActiveOwner(userId);
+		UUID ownerId = ownerAccess.requireActiveOwner(userId);
 		String normalizedName = name.strip();
 		if (normalizedName.length() < 2 || normalizedName.length() > 100) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome da loja deve ter de 2 a 100 caracteres.");
 		}
 		var store = new Store(UUID.randomUUID(), normalizedName, Instant.now());
 		stores.create(store);
+		stores.assignOwner(store.id(), ownerId);
 		if (!stores.addMember(new StoreMembership(store.id(), userId, StoreRole.OWNER, store.createdAt()))) {
 			throw new IllegalStateException("New store already has its owner membership");
 		}

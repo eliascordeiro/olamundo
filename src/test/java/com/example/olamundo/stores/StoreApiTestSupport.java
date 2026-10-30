@@ -42,12 +42,29 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 
 	final List<Actor> actors = new ArrayList<>();
 	final List<UUID> createdStores = new ArrayList<>();
+	final List<UUID> createdOwners = new ArrayList<>();
 
 	Actor actor() throws Exception {
+		return actor(true);
+	}
+
+	Actor plainActor() throws Exception {
+		return actor(false);
+	}
+
+	private Actor actor(boolean platformOwner) throws Exception {
 		String email = "store-test-" + UUID.randomUUID() + "@example.com";
 		String password = "a-store-test-passphrase";
 		var account = users.insert(new UserAccount(null, "Store Tester", email,
 				passwords.encode(password), Instant.now()));
+		if (platformOwner) {
+			UUID ownerId = UUID.randomUUID();
+			createdOwners.add(ownerId);
+			jdbc.sql("""
+					INSERT INTO platform_owners (id, name, email, status, user_id, created_by, created_at, updated_at)
+					VALUES (:id, 'Store Tester', :email, 'ACTIVE', :user, 'test', now(), now())
+					""").param("id", ownerId).param("email", email).param("user", account.id()).update();
+		}
 		var cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
 		var actor = new Actor(account, cookies, HttpClient.newBuilder().cookieHandler(cookies)
 				.followRedirects(HttpClient.Redirect.NEVER).build());
@@ -97,6 +114,10 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 			jdbc.sql("DELETE FROM catalog_products WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM store_memberships WHERE store_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM stores WHERE id = :id").param("id", id).update();
+		}
+		for (UUID id : createdOwners) {
+			jdbc.sql("DELETE FROM platform_owner_invites WHERE owner_id = :id").param("id", id).update();
+			jdbc.sql("DELETE FROM platform_owners WHERE id = :id").param("id", id).update();
 		}
 		for (Actor actor : actors) {
 			users.deleteById(actor.account().id());

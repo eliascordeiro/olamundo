@@ -118,7 +118,7 @@ class PlatformOwnerIntegrationTests extends StoreApiTestSupport {
 	@Test
 	void existingAccountBecomesOwnerImmediatelyAndCannotOwnTwoRecords() throws Exception {
 		var platformSuper = superActor();
-		var existing = actor();
+		var existing = plainActor();
 		String email = existing.account().email();
 		var created = createOwner(platformSuper, UUID.randomUUID(), "Conta Existente", email);
 		assertThat(created.get("owner").get("status").asText()).isEqualTo("ACTIVE");
@@ -128,6 +128,22 @@ class PlatformOwnerIntegrationTests extends StoreApiTestSupport {
 		assertThat(post(platformSuper, "/api/platform/owners",
 				Map.of("requestId", UUID.randomUUID(), "name", "Duplicado", "email", email)).statusCode())
 				.isEqualTo(409);
+	}
+
+	@Test
+	void onlyActiveOwnersCreateStoresAndSessionReportsOwnerStatus() throws Exception {
+		var plain = plainActor();
+		var denied = post(plain, "/api/stores", Map.of("name", "Loja Negada"));
+		assertThat(denied.statusCode()).isEqualTo(403);
+		assertThat(get(plain, "/api/stores").body()).doesNotContain("Loja Negada");
+		assertThat(json.readTree(get(plain, "/api/auth/me").body()).get("platformOwner").asBoolean()).isFalse();
+
+		var platformSuper = superActor();
+		assertThat(post(platformSuper, "/api/stores", Map.of("name", "Super nao opera")).statusCode()).isEqualTo(403);
+
+		var owner = actor();
+		assertThat(json.readTree(get(owner, "/api/auth/me").body()).get("platformOwner").asBoolean()).isTrue();
+		assertThat(createStore(owner, "Loja do Proprietario").get("name").asText()).isEqualTo("Loja do Proprietario");
 	}
 
 	@Test

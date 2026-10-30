@@ -41,7 +41,7 @@ public class StoreController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Criar loja; usuario atual torna-se OWNER")
+	@Operation(summary = "Criar loja; somente proprietario ativo da plataforma, que se torna OWNER")
 	@SecurityRequirement(name = "csrf")
 	public ResponseEntity<Store> create(Principal principal, @Valid @RequestBody NewStore request) {
 		var store = stores.create(userId(principal), request.name());

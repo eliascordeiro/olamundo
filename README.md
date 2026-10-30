@@ -127,6 +127,10 @@ herda acesso as lojas**: so administra proprietarios em `/api/platform`.
   entrega: o Super entrega o link ao proprietario. Novo convite invalida os anteriores.
   O proprietario define a propria senha (BCrypt); nenhuma senha e criada pelo Super.
 - Um e-mail/conta so pode pertencer a um proprietario (409 em duplicidade).
+- **Somente proprietario ativo cria lojas** (`POST /api/stores` retorna 403 para
+  as demais contas, inclusive o Super). Quem ja e OWNER de lojas as mantem.
+  `GET /api/auth/me` devolve `platformOwner` para o front-end exibir a tela de
+  criacao. Contas comuns continuam podendo ser vinculadas a lojas por um OWNER.
 - A V7 cria `platform_owners` e `platform_owner_invites` e semeia **Móveis Murimel**
   como `PENDING`, sem e-mail, conta, lojas ou dados. Nao ha importacao do legado;
   associar lojas ao proprietario e a carga do Murimel sao etapas futuras. Hoje o

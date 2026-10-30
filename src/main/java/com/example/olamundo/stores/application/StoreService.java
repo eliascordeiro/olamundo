@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.example.olamundo.auth.AccountDirectory;
+import com.example.olamundo.platform.application.OwnerAccess;
 import com.example.olamundo.shared.PageSlice;
 import com.example.olamundo.stores.domain.Store;
 import com.example.olamundo.stores.domain.StoreMembership;
@@ -18,15 +19,19 @@ public class StoreService {
 	private final StoreRepository stores;
 	private final AccountDirectory accounts;
 	private final StoreAuthorization authorization;
+	private final OwnerAccess ownerAccess;
 
-	public StoreService(StoreRepository stores, AccountDirectory accounts, StoreAuthorization authorization) {
+	public StoreService(StoreRepository stores, AccountDirectory accounts, StoreAuthorization authorization,
+			OwnerAccess ownerAccess) {
 		this.stores = stores;
 		this.accounts = accounts;
 		this.authorization = authorization;
+		this.ownerAccess = ownerAccess;
 	}
 
 	@Transactional
 	public Store create(String userId, String name) {
+		ownerAccess.requireActiveOwner(userId);
 		String normalizedName = name.strip();
 		if (normalizedName.length() < 2 || normalizedName.length() > 100) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome da loja deve ter de 2 a 100 caracteres.");

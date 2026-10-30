@@ -150,6 +150,23 @@ class SellerAccessIntegrationTests extends StoreApiTestSupport {
 	}
 
 	@Test
+	void importedSellerWithTheSameNameIsLinkedInsteadOfDuplicated() throws Exception {
+		var owner = actor();
+		var account = plainActor();
+		String north = createStore(owner, "Homonimo Norte").get("id").asText();
+		String south = createStore(owner, "Homonimo Sul").get("id").asText();
+		var seller = createSeller(owner, north, "Marina Importada");
+		createSeller(owner, south, "marina IMPORTADA");
+
+		var response = grant(owner, north, seller, account.account().email(), 0,
+				List.of(item(north, "STAFF"), item(south, "STAFF")));
+		assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+		var southSellers = json.readTree(get(owner, "/api/stores/" + south + "/salespeople").body()).get("content");
+		assertThat(southSellers).hasSize(1);
+		assertThat(southSellers.get(0).get("userId").asText()).isEqualTo(account.account().id());
+	}
+
+	@Test
 	void inviteIsIgnoredForStoresTheIssuerNoLongerOwns() throws Exception {
 		var owner = actor();
 		String north = createStore(owner, "Perdida Norte").get("id").asText();

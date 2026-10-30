@@ -12,6 +12,8 @@ public interface SalespersonRepository {
 	boolean matchesRegistration(UUID storeId, UUID id, String name, String actorId);
 	Optional<Salesperson> find(UUID storeId, UUID id);
 	Optional<Salesperson> findByUser(UUID storeId, String userId);
+	/** Cadastro ainda sem conta com o mesmo nome (ignora caixa e espacos), para reaproveitar em vez de duplicar. */
+	Optional<Salesperson> findUnlinkedByName(UUID storeId, String name);
 	List<Salesperson> list(UUID storeId, int limit, long offset);
 	Optional<Salesperson> update(UUID storeId, UUID id, String name, boolean active,
 			long version, String actorId, Instant now);

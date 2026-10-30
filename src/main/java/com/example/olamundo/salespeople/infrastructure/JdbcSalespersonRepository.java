@@ -53,6 +53,14 @@ public class JdbcSalespersonRepository implements SalespersonRepository {
 	}
 
 	@Override
+	public Optional<Salesperson> findUnlinkedByName(UUID storeId, String name) {
+		return jdbc.sql("""
+				SELECT * FROM salespeople WHERE store_id = :store AND user_id IS NULL AND active
+				AND lower(btrim(name)) = lower(btrim(:name)) ORDER BY created_at, id LIMIT 1
+				""").param("store", storeId).param("name", name).query(this::map).optional();
+	}
+
+	@Override
 	public List<Salesperson> list(UUID storeId, int limit, long offset) {
 		return jdbc.sql("""
 				SELECT * FROM salespeople WHERE store_id = :store

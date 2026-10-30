@@ -133,6 +133,10 @@ public class SellerAccessService {
 				seller = salespeople.findByUser(item.storeId(), userId).orElse(null);
 			}
 			if (seller == null) {
+				// Cadastros importados ja existem sem conta: liga o homonimo em vez de duplicar.
+				seller = salespeople.findUnlinkedByName(item.storeId(), name).orElse(null);
+			}
+			if (seller == null) {
 				UUID id = UUID.randomUUID();
 				salespeople.create(item.storeId(), id, name, actorId, now);
 				seller = salespeople.find(item.storeId(), id).orElseThrow();

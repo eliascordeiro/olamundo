@@ -1,28 +1,47 @@
-# Importador do legado Murimel (dry-run)
+# Importador do legado Murimel
 
-Le o dump MySQL do legado e gera relatorios do que **seria** carregado
-(lojas, vendedores, produtos e saldos de abertura) e das pendencias. **Nao grava
-em nenhum banco e nao altera a aplicacao.** Python 3.10+, sem dependencias.
+Python 3.10+, sem dependencias. **Nenhum script conecta a banco**: eles leem o dump
+e escrevem arquivos. Quem aplica o SQL e voce, primeiro em um banco de teste.
+Nunca versione o dump nem as saidas (`legacy-import-out/` esta no `.gitignore`).
 
 ```bash
-python3 tools/legacy-import/murimel_dryrun.py "/caminho/dump.sql" --out ./legacy-import-out
-python3 -m unittest discover -s tools/legacy-import      # testes
+python3 -m unittest discover -s tools/legacy-import                              # testes
+python3 tools/legacy-import/murimel_dryrun.py  "dump.sql" --out ./legacy-import-out  # 1) simulacao
+python3 tools/legacy-import/murimel_import.py  "dump.sql" --out ./legacy-import-out  # 2) gera o SQL
 ```
 
-Saidas (em `--out`, pasta ignorada pelo Git; **nunca versione o dump nem as saidas**):
+## 1) Simulacao (`murimel_dryrun.py`)
+Mede o dump e lista pendencias (`relatorio.md`, `pendencias.csv`, `plano.json`).
+
+## 2) Carga (`murimel_import.py`)
+Gera, em `--out`:
 
 | Arquivo | Conteudo |
 | --- | --- |
-| `relatorio.md` | Resumo, pendencias por tipo, historico medido e decisoes abertas |
-| `pendencias.csv` | Uma linha por pendencia (`BLOQUEIA`, `REVISAR`, `INFO`), com codigo legado |
-| `vendedores.csv` | Vendedores para o proprietario preencher o e-mail (coluna `email`) |
-| `plano.json` | Contagens para comparar execucoes |
+| `carga_murimel.sql` | Lojas, produtos, vendedores e saldos de abertura, em uma transacao, idempotente |
+| `anexar_proprietario.sql` | Concede OWNER das lojas importadas ao proprietario "Móveis Murimel" **depois que ele ativar a conta** |
+| `descartados.csv` | Tudo que nao foi importado, com o motivo |
+| `vendedores.csv` | Vendedores por pessoa/loja; coluna `email` para o proprietario preencher |
+| `relatorio_carga.md` | Contagens do que o SQL grava |
 
-Garantias: senhas (`easy_vendedor.senha`, `easy_senha`, `easy_usuario`) nao entram
-em nenhuma saida; clientes e historico de vendas nao sao importados (so medidos);
-flag master nunca vira proprietario; nada e truncado ou corrigido em silencio —
-problemas viram pendencia. Textos com acentuacao dupla codificada sao corrigidos
-quando a reversao e exata; o dump atual so tem esse problema em clientes/enderecos.
+Decisoes aplicadas: produto so nas lojas com saldo valido ou venda; saldos invalidos
+(produto inexistente, negativo, loja descartada) **nao** sao importados; loja 1 e o que
+depende dela sao descartados; nomes acima de 120 caracteres sao encurtados sem partir
+palavra e o nome completo vai para a descricao; mesmo nome em varias lojas = mesma pessoa.
 
-Regras de saldo do destino: inteiro, nao negativo, ate 2147483647. Saldos zerados
-sao ignorados; de produto inexistente, negativos ou de loja sem cadastro viram pendencia.
+Garantias: senhas do legado nunca sao lidas para as saidas; flag master nao vira
+proprietario; vendedores entram **sem conta** (o proprietario informa o e-mail e envia
+o convite); clientes, vendas, pagamentos, recibos, montagens, grupos e custos ficam
+fora. Ids sao deterministicos (uuid5) e a V9 grava `legacy_code` em lojas e vendedores.
+
+### Como aplicar (teste local descartavel)
+```bash
+docker run -d --name murimel-pg-test -e POSTGRES_PASSWORD=test -p 127.0.0.1:55433:5432 postgres:17-alpine
+for f in src/main/resources/db/migration/V*.sql; do   # na ordem V1..V9
+  docker exec -i murimel-pg-test psql -U postgres -v ON_ERROR_STOP=1 -q < "$f"; done
+docker exec -i murimel-pg-test psql -U postgres -v ON_ERROR_STOP=1 -q < legacy-import-out/carga_murimel.sql
+docker rm -f murimel-pg-test
+```
+(Use a ordem numerica das migracoes: `V1`..`V9`, nao a alfabetica se passar de `V9`.)
+Em producao, rode as migracoes pelo proprio backend (Flyway) e aplique o
+`carga_murimel.sql` com `psql` somente depois de revisar o `descartados.csv`.

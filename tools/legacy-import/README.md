@@ -44,6 +44,16 @@ invalido/placeholder nunca une ninguem e entra vazio; campos invalidos (e-mail, 
 `0001-01-01`) viram vazios, nunca inventados; acentuacao dupla codificada e corrigida. Os arquivos de
 apoio contem so codigos, sem dados pessoais. Aplicar: `psql ... -f carga_clientes.sql` (idempotente, ~30 s).
 
+### 4) Fornecedores (`murimel_suppliers.py`) e Grupos/Subgrupos (`murimel_groups.py`)
+Dependem da **V11**. Geram `carga_fornecedores.sql` e `carga_grupos.sql` (+ relatorios e CSVs so com codigos).
+- Fornecedores: mesmas regras dos clientes (CNPJ/CPF valido repetido e unido automaticamente, codigos antigos
+  rastreados em `legacy_codes`, documento invalido nunca une ninguem, campos invalidos viram vazios).
+- Grupos/subgrupos: nome, NCM e percentuais do legado (valores fora da faixa viram 0 e sao reportados). **Classifica os
+  produtos ja importados** (por SKU = codigo legado), mas so os que ainda estao sem grupo, sem sobrescrever
+  classificacao feita depois. Execute depois da carga de produtos.
+- Ordem completa: `carga_murimel.sql` -> `anexar_proprietario.sql` (dono ativo) -> V10/V11 pelo backend ->
+  `carga_clientes.sql`, `carga_fornecedores.sql`, `carga_grupos.sql`. Todas idempotentes.
+
 ### Como aplicar (teste local descartavel)
 ```bash
 docker run -d --name murimel-pg-test -e POSTGRES_PASSWORD=test -p 127.0.0.1:55433:5432 postgres:17-alpine

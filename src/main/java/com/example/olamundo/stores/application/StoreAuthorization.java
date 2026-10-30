@@ -35,7 +35,7 @@ public class StoreAuthorization {
 		requireWriter(storeId, userId, "Somente OWNER ou MANAGER pode movimentar estoque.");
 	}
 
-	private void requireWriter(UUID storeId, String userId, String message) {
+	public void requireWriter(UUID storeId, String userId, String message) {
 		var role = requireMember(storeId, userId);
 		if (role != StoreRole.OWNER && role != StoreRole.MANAGER) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN,

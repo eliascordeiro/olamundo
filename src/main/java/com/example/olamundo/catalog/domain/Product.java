@@ -5,5 +5,6 @@ import java.time.Instant;
 import java.util.UUID;
 
 public record Product(UUID id, UUID storeId, String name, String sku, String description,
-		BigDecimal price, String currency, Instant createdAt) {
+		BigDecimal price, String currency, Instant createdAt, UUID groupId, String groupName,
+		UUID subgroupId, String subgroupName) {
 }

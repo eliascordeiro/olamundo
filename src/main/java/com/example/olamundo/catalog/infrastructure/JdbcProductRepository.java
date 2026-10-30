@@ -35,15 +35,23 @@ public class JdbcProductRepository implements ProductRepository {
 	@Override
 	public List<Product> list(UUID storeId, int limit, long offset) {
 		return jdbc.sql("""
-				SELECT * FROM catalog_products WHERE store_id = :storeId
-				ORDER BY created_at, id LIMIT :limit OFFSET :offset
+				SELECT p.*, g.name AS group_name, s.name AS subgroup_name FROM catalog_products p
+				LEFT JOIN product_groups g ON g.id = p.group_id
+				LEFT JOIN product_subgroups s ON s.id = p.subgroup_id
+				WHERE p.store_id = :storeId
+				ORDER BY p.created_at, p.id LIMIT :limit OFFSET :offset
 				""").param("storeId", storeId).param("limit", limit).param("offset", offset)
 				.query((row, index) -> product(row)).list();
 	}
 
 	@Override
 	public Optional<Product> find(UUID storeId, UUID productId) {
-		return jdbc.sql("SELECT * FROM catalog_products WHERE store_id = :storeId AND id = :productId")
+		return jdbc.sql("""
+				SELECT p.*, g.name AS group_name, s.name AS subgroup_name FROM catalog_products p
+				LEFT JOIN product_groups g ON g.id = p.group_id
+				LEFT JOIN product_subgroups s ON s.id = p.subgroup_id
+				WHERE p.store_id = :storeId AND p.id = :productId
+				""")
 				.param("storeId", storeId).param("productId", productId)
 				.query((row, index) -> product(row)).optional();
 	}
@@ -51,6 +59,8 @@ public class JdbcProductRepository implements ProductRepository {
 	private static Product product(ResultSet row) throws SQLException {
 		return new Product(row.getObject("id", UUID.class), row.getObject("store_id", UUID.class),
 				row.getString("name"), row.getString("sku"), row.getString("description"),
-				row.getBigDecimal("price"), row.getString("currency"), row.getTimestamp("created_at").toInstant());
+				row.getBigDecimal("price"), row.getString("currency"), row.getTimestamp("created_at").toInstant(),
+				row.getObject("group_id", UUID.class), row.getString("group_name"),
+				row.getObject("subgroup_id", UUID.class), row.getString("subgroup_name"));
 	}
 }

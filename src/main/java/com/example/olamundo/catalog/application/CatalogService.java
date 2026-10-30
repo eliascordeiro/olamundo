@@ -38,7 +38,7 @@ public class CatalogService {
 		}
 		var product = new Product(UUID.randomUUID(), storeId, normalizedName, normalizedSku,
 				description == null ? "" : description.strip(), price.setScale(2, RoundingMode.UNNECESSARY),
-				"BRL", Instant.now());
+				"BRL", Instant.now(), null, null, null, null);
 		if (!products.insert(product)) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe um produto com este SKU nesta loja.");
 		}

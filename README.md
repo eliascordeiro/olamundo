@@ -182,6 +182,31 @@ Um CPF/CNPJ por empresa (409 em duplicidade; clientes sem documento podem coexis
 retorna 409. `customer_legacy_codes` guarda os codigos do sistema antigo (varios podem apontar para um cliente).
 Nao ha exclusao. Dados de credito (salario, filiacao, conjuge, empresa, referencias) nao existem no modelo (LGPD).
 
+## Fornecedores e grupos de produtos (da empresa)
+
+Como os clientes, pertencem a **empresa** (`stores.owner_id`) e valem para todas as lojas dela; loja sem
+empresa responde 409; nao membros recebem 404. **Qualquer membro da loja consulta; somente OWNER e MANAGER
+cadastram e editam** (STAFF recebe 403 nas escritas). Escritas exigem CSRF e aceitam reenvio seguro por
+`requestId`; edicoes usam `version` (409 em conflito). Nao ha exclusao.
+
+| Metodo | Rota | Contrato |
+| --- | --- | --- |
+| GET | `/api/stores/{storeId}/suppliers?q=&page=&size=` | Busca por nome, CNPJ/CPF (prefixo) ou telefone |
+| GET | `/api/stores/{storeId}/suppliers/{id}` | Consulta |
+| POST | `/api/stores/{storeId}/suppliers` | `{"requestId","name", ...}`; `document` so CNPJ/CPF valido; um por empresa (409) |
+| POST | `/api/stores/{storeId}/suppliers/{id}` | `{"version","name","active", ...}` |
+| GET | `/api/stores/{storeId}/product-groups` | Todos os grupos da empresa, cada um com seus `subgroups` |
+| POST | `/api/stores/{storeId}/product-groups` | `{"requestId","name","ncm","commission","assemblyCommission","assemblyDiscount","markup","pautaDiscount","flexibleDiscount"}` |
+| POST | `/api/stores/{storeId}/product-groups/{groupId}` | Idem com `version` |
+| POST | `/api/stores/{storeId}/product-groups/{groupId}/subgroups` | `{"requestId","name","markup","margin","pautaDiscount","flexibleDiscount"}` |
+| POST | `/api/stores/{storeId}/product-groups/{groupId}/subgroups/{id}` | Idem com `version` |
+
+Nome do grupo e unico por empresa (sem diferenciar caixa; 409). Percentuais: comissoes e descontos 0..100,
+markup e margem 0..1000, ate duas casas; ausente vale 0. Comissoes e descontos sao guardados para o futuro modulo
+de vendas e **ainda nao tem efeito**. `GET .../products` e `.../products/{id}` passam a trazer `groupId`, `groupName`,
+`subgroupId` e `subgroupName` (somente leitura; ainda nao ha como classificar um produto novo pela API).
+`legacy_codes` guarda os codigos do sistema antigo de fornecedores, grupos e subgrupos (V11).
+
 ## Etapa 2 - catalogo por loja
 
 O modulo `catalog` mantem API, aplicacao, dominio e infraestrutura JDBC separados.

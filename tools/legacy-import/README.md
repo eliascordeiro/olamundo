@@ -54,6 +54,13 @@ Dependem da **V11**. Geram `carga_fornecedores.sql` e `carga_grupos.sql` (+ rela
 - Ordem completa: `carga_murimel.sql` -> `anexar_proprietario.sql` (dono ativo) -> V10/V11 pelo backend ->
   `carga_clientes.sql`, `carga_fornecedores.sql`, `carga_grupos.sql`. Todas idempotentes.
 
+### 5) Enderecos de entrega (`murimel_addresses.py`)
+Gera `carga_enderecos.sql` (+ `enderecos_nao_importados.csv`, `relatorio_enderecos.md`). **Depende da V12** e da
+carga de clientes (acha o cliente final por `customer_legacy_codes`, entao unioes de clientes sao respeitadas).
+Decisoes: enderecos identicos ao endereco principal do cliente nao sao importados; sem rua e descartado; CEP
+invalido (`---  -  -`) importa o endereco sem CEP; cliente inexistente/nao importado e descartado; condominio,
+bloco e apto viram o complemento (`Cond. X, Bl. Y, Ap. Z`). Ids deterministicos; idempotente.
+
 ### Como aplicar (teste local descartavel)
 ```bash
 docker run -d --name murimel-pg-test -e POSTGRES_PASSWORD=test -p 127.0.0.1:55433:5432 postgres:17-alpine

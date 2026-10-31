@@ -32,6 +32,7 @@ class PlatformOwnerIntegrationTests extends StoreApiTestSupport {
 	void cleanupPlatformData() {
 		for (UUID id : owners) {
 			jdbc.sql("UPDATE stores SET owner_id = NULL WHERE owner_id = :id").param("id", id).update();
+			jdbc.sql("DELETE FROM customer_delivery_addresses WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM customer_legacy_codes WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM customers WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM platform_owner_invites WHERE owner_id = :id").param("id", id).update();

@@ -99,6 +99,12 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 				.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
+	HttpResponse<String> delete(Actor actor, String path) throws Exception {
+		var request = HttpRequest.newBuilder(uri(path)).DELETE()
+				.header("X-CSRF-TOKEN", json.readTree(get(actor, "/api/auth/csrf").body()).get("token").asText());
+		return actor.client().send(request.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
 	URI uri(String path) {
 		return URI.create("http://localhost:" + port + path);
 	}
@@ -116,6 +122,7 @@ abstract class StoreApiTestSupport extends MongoIntegrationTest {
 			jdbc.sql("DELETE FROM stores WHERE id = :id").param("id", id).update();
 		}
 		for (UUID id : createdOwners) {
+			jdbc.sql("DELETE FROM customer_delivery_addresses WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM customer_legacy_codes WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM customers WHERE owner_id = :id").param("id", id).update();
 			jdbc.sql("DELETE FROM suppliers WHERE owner_id = :id").param("id", id).update();
